@@ -136,7 +136,7 @@ function GridFloor() {
   const texture = useGridTexture();
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-      <circleGeometry args={[70, 64]} />
+      <circleGeometry args={[85, 64]} />
       <meshStandardMaterial map={texture} roughness={0.95} metalness={0.05} />
     </mesh>
   );
@@ -312,7 +312,7 @@ function distanceToPath(x: number, z: number) {
   return min;
 }
 
-function GrassTufts({ count = 1300 }: { count?: number }) {
+function GrassTufts({ count = 2400 }: { count?: number }) {
   const meshRef = useRef<InstancedMesh>(null);
 
   const placements = useMemo(() => {
@@ -325,6 +325,8 @@ function GrassTufts({ count = 1300 }: { count?: number }) {
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
       if (distanceToPath(x, z) < 1.15) continue;
+      // keep the name monument clearing tidy
+      if (Math.abs(x) < 8.5 && z > -12.5 && z < -7) continue;
       const nearLandmark = knowMeLandmarks.some(
         (l) => Math.hypot(x - l.position[0], z - l.position[2]) < 2.4,
       );
@@ -381,11 +383,13 @@ function GrassTufts({ count = 1300 }: { count?: number }) {
 /* Big extruded name — like the BRUNO SIMON text   */
 /* ---------------------------------------------- */
 function NameMonument() {
+  // Sits in a dedicated clearing north of the spawn plaza —
+  // no stones, paths, or trees are placed in this corridor.
   return (
-    <Center position={[0, 0, 6.4]} disableY>
+    <Center position={[0, 0, -9.5]} disableY>
       <Text3D
         font={KNOWME_TITLE_FONT}
-        size={1.5}
+        size={1.35}
         height={0.55}
         bevelEnabled
         bevelThickness={0.045}
@@ -481,14 +485,18 @@ function Bush({
 }
 
 const bushPlacements: Array<{ position: [number, number, number]; scale: number }> = [
-  { position: [-5.6, 0.3, 4.2], scale: 1.1 },
-  { position: [6.2, 0.25, 3.2], scale: 0.9 },
-  { position: [-7.8, 0.3, -3.4], scale: 1.2 },
-  { position: [7.4, 0.28, -3.8], scale: 1.0 },
-  { position: [-3.2, 0.24, -8.4], scale: 0.85 },
-  { position: [3.8, 0.3, 9.2], scale: 1.15 },
-  { position: [-11.2, 0.26, 1.8], scale: 0.9 },
-  { position: [11.6, 0.3, 1.2], scale: 1.05 },
+  { position: [-8.4, 0.3, 6.3], scale: 1.1 },
+  { position: [9.3, 0.25, 4.8], scale: 0.9 },
+  { position: [-11.7, 0.3, -5.1], scale: 1.2 },
+  { position: [11.1, 0.28, -5.7], scale: 1.0 },
+  { position: [-4.8, 0.24, -12.6], scale: 0.85 },
+  { position: [5.7, 0.3, 13.8], scale: 1.15 },
+  { position: [-16.8, 0.26, 2.7], scale: 0.9 },
+  { position: [17.4, 0.3, 1.8], scale: 1.05 },
+  { position: [-2.2, 0.28, 17.5], scale: 1.1 },
+  { position: [13.5, 0.26, 10.5], scale: 0.9 },
+  { position: [-14.5, 0.3, -12], scale: 1.05 },
+  { position: [6.5, 0.24, -14.5], scale: 0.9 },
 ];
 
 /* ---------------------------------------------- */
@@ -784,7 +792,7 @@ function SpawnArea() {
       </mesh>
       <Text
         font={KNOWME_HAND_FONT}
-        position={[0, 0.04, -5.6]}
+        position={[0, 0.04, 5.4]}
         rotation={[-Math.PI / 2, 0, 0]}
         fontSize={0.78}
         color="#ffffff"
@@ -830,8 +838,8 @@ function FollowCamera({ target }: { target: RefObject<Group | null> }) {
     }
     const desired = new Vector3(
       player.position.x,
-      player.position.y + 8,
-      player.position.z + 10.5,
+      player.position.y + 9,
+      player.position.z + 12,
     );
     current.current.lerp(desired, 0.06);
     camera.position.copy(current.current);
@@ -922,8 +930,8 @@ function PlayerController({
     const player = playerRef.current;
     if (!player || pausedRef.current) return;
 
-    const accel = 26;
-    const maxSpeed = 6.5;
+    const accel = 30;
+    const maxSpeed = 7.5;
     const damp = Math.pow(0.84, delta * 60);
     const input = new Vector3(
       (keys.current.right ? 1 : 0) - (keys.current.left ? 1 : 0),
@@ -1038,12 +1046,13 @@ function WorldContents({
       <SpawnArea />
       <NameMonument />
 
-      <Fence position={[-4.8, 0, -1.6]} rotationY={1.2} />
-      <Fence position={[4.8, 0, -1.4]} rotationY={-1.2} />
+      {/* fences frame the name monument clearing */}
+      <Fence position={[-6.2, 0, -7.2]} rotationY={0.35} />
+      <Fence position={[6.2, 0, -7.2]} rotationY={-0.35} />
 
-      <Crate position={[7.6, 0, 5.4]} rotationY={0.3} />
-      <Crate position={[8.4, 0, 4.7]} rotationY={-0.4} scale={0.85} />
-      <Crate position={[7.9, 0.84, 5.1]} rotationY={0.9} scale={0.75} />
+      <Crate position={[10.8, 0, 8.2]} rotationY={0.3} />
+      <Crate position={[11.6, 0, 7.5]} rotationY={-0.4} scale={0.85} />
+      <Crate position={[11.1, 0.84, 7.9]} rotationY={0.9} scale={0.75} />
 
       {bushPlacements.map((bush, index) => (
         <Bush key={index} position={bush.position} scale={bush.scale} />
@@ -1117,7 +1126,7 @@ export function KnowMeWorldScene({
       gl={{ antialias: true, alpha: false }}
     >
       <color attach="background" args={[NIGHT_BG]} />
-      <fog attach="fog" args={[NIGHT_BG, 24, 52]} />
+      <fog attach="fog" args={[NIGHT_BG, 28, 66]} />
 
       <ambientLight color="#d9c4ff" intensity={0.32} />
       <hemisphereLight args={["#c77aff", "#12041f", 0.4]} />
@@ -1127,10 +1136,10 @@ export function KnowMeWorldScene({
         position={[12, 18, 8]}
         intensity={1.15}
         shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-24}
-        shadow-camera-right={24}
-        shadow-camera-top={24}
-        shadow-camera-bottom={-24}
+        shadow-camera-left={-32}
+        shadow-camera-right={32}
+        shadow-camera-top={32}
+        shadow-camera-bottom={-32}
       />
 
       <Stars radius={60} depth={24} count={1400} factor={3.2} fade speed={0.5} />
