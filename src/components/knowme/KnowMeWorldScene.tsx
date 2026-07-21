@@ -40,7 +40,6 @@ import {
 import {
   KNOWME_AVATAR_PATH,
   KNOWME_HAND_FONT,
-  KNOWME_STONES_PATH,
   KNOWME_TITLE_FONT,
   LANDMARK_ENTER_RADIUS,
   MAP_RADIUS,
@@ -136,7 +135,7 @@ function GridFloor() {
   const texture = useGridTexture();
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-      <circleGeometry args={[85, 64]} />
+      <circleGeometry args={[120, 64]} />
       <meshStandardMaterial map={texture} roughness={0.95} metalness={0.05} />
     </mesh>
   );
@@ -312,7 +311,7 @@ function distanceToPath(x: number, z: number) {
   return min;
 }
 
-function GrassTufts({ count = 2400 }: { count?: number }) {
+function GrassTufts({ count = 3600 }: { count?: number }) {
   const meshRef = useRef<InstancedMesh>(null);
 
   const placements = useMemo(() => {
@@ -326,7 +325,7 @@ function GrassTufts({ count = 2400 }: { count?: number }) {
       const z = Math.sin(angle) * radius;
       if (distanceToPath(x, z) < 1.15) continue;
       // keep the name monument clearing tidy
-      if (Math.abs(x) < 8.5 && z > -12.5 && z < -7) continue;
+      if (Math.abs(x) < 10.5 && z > -13 && z < -6.5) continue;
       const nearLandmark = knowMeLandmarks.some(
         (l) => Math.hypot(x - l.position[0], z - l.position[2]) < 2.4,
       );
@@ -389,8 +388,8 @@ function NameMonument() {
     <Center position={[0, 0, -9.5]} disableY>
       <Text3D
         font={KNOWME_TITLE_FONT}
-        size={1.35}
-        height={0.55}
+        size={1.6}
+        height={0.6}
         bevelEnabled
         bevelThickness={0.045}
         bevelSize={0.035}
@@ -547,30 +546,102 @@ function PlayerAvatar() {
   return <primitive ref={modelRef} object={model} />;
 }
 
-/* ------------------------------------------------- */
-/* Landmark stone — glowing ring + rock + hand label  */
-/* ------------------------------------------------- */
-function useStoneMesh(meshName: string) {
-  const { scene } = useGLTF(KNOWME_STONES_PATH);
-  return useMemo(() => {
-    let source: Object3D | null = null;
-    scene.traverse((child) => {
-      if (!source && child.name === meshName) source = child;
-    });
-    if (!source) {
-      scene.traverse((child) => {
-        const mesh = child as Mesh;
-        if (!source && mesh.isMesh) source = child;
-      });
-    }
-    if (!source) return null;
-    const cloned = (source as Object3D).clone(true);
-    cloned.position.set(0, 0, 0);
-    cloned.rotation.set(0, 0, 0);
-    prepareShadows(cloned);
-    return cloned;
-  }, [scene, meshName]);
+/* --------------------------------------------------------------- */
+/* Procedural rocks — deterministic per seed, always upright        */
+/* (the stones.glb meshes had baked orientations that lay flat,     */
+/*  so the monuments are built from primitives instead)             */
+/* --------------------------------------------------------------- */
+function seededRand(seed: number, index: number) {
+  const value = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453;
+  return value - Math.floor(value);
 }
+
+function StandingRock({ seed }: { seed: number }) {
+  const { color, height, leanZ, leanX, baseRocks } = useMemo(() => {
+    const base = new Color("#9b8fae");
+    base.offsetHSL(
+      (seededRand(seed, 1) - 0.5) * 0.06,
+      0,
+      (seededRand(seed, 2) - 0.5) * 0.08,
+    );
+    return {
+      color: base,
+      height: 1.55 + seededRand(seed, 3) * 0.5,
+      leanZ: (seededRand(seed, 4) - 0.5) * 0.22,
+      leanX: (seededRand(seed, 5) - 0.5) * 0.14,
+      baseRocks: [0, 1, 2].map((i) => ({
+        x: Math.cos(seededRand(seed, 6 + i) * Math.PI * 2) * (0.85 + seededRand(seed, 9 + i) * 0.35),
+        z: Math.sin(seededRand(seed, 6 + i) * Math.PI * 2) * (0.85 + seededRand(seed, 9 + i) * 0.35),
+        s: 0.3 + seededRand(seed, 12 + i) * 0.28,
+        rot: seededRand(seed, 15 + i) * Math.PI,
+      })),
+    };
+  }, [seed]);
+
+  return (
+    <group>
+      {/* main upright monolith */}
+      <mesh
+        castShadow
+        receiveShadow
+        position={[0, height * 0.78, 0]}
+        rotation={[leanX, seededRand(seed, 20) * Math.PI, leanZ]}
+        scale={[1.05, height, 0.72]}
+      >
+        <dodecahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial color={color} roughness={0.9} flatShading />
+      </mesh>
+      {/* small rocks around the base */}
+      {baseRocks.map((rock, i) => (
+        <mesh
+          key={i}
+          castShadow
+          receiveShadow
+          position={[rock.x, rock.s * 0.5, rock.z]}
+          rotation={[0, rock.rot, 0]}
+          scale={[rock.s * 1.3, rock.s * 0.75, rock.s]}
+        >
+          <icosahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial color={color} roughness={0.92} flatShading />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function SmallRock({
+  seed,
+  scale,
+}: {
+  seed: number;
+  scale: number;
+}) {
+  const color = useMemo(() => {
+    const base = new Color("#7d7290");
+    base.offsetHSL(
+      (seededRand(seed, 1) - 0.5) * 0.05,
+      0,
+      (seededRand(seed, 2) - 0.5) * 0.07,
+    );
+    return base;
+  }, [seed]);
+
+  return (
+    <mesh
+      castShadow
+      receiveShadow
+      position={[0, 0.28 * scale, 0]}
+      scale={[scale, scale * 0.55, scale * 0.8]}
+    >
+      <icosahedronGeometry args={[0.6, 0]} />
+      <meshStandardMaterial color={color} roughness={0.92} flatShading />
+    </mesh>
+  );
+}
+
+/* ------------------------------------------------- */
+/* Landmark — glowing ring + standing rock + label    */
+/* ------------------------------------------------- */
 
 function LandmarkStone({
   landmark,
@@ -579,7 +650,6 @@ function LandmarkStone({
   landmark: KnowMeLandmark;
   active: boolean;
 }) {
-  const stone = useStoneMesh(landmark.stoneMesh);
   const ringMat = useRef<MeshStandardMaterial>(null);
   const fillMat = useRef<MeshStandardMaterial>(null);
   const emberColor = useMemo(() => new Color(EMBER), []);
@@ -624,11 +694,9 @@ function LandmarkStone({
         />
       </mesh>
 
-      {stone && (
-        <group scale={landmark.stoneScale} rotation={[0, landmark.stoneRotationY, 0]}>
-          <primitive object={stone} />
-        </group>
-      )}
+      <group rotation={[0, landmark.rotationY, 0]}>
+        <StandingRock seed={landmark.seed} />
+      </group>
 
       {/* warm light so the stone reads at night */}
       <pointLight
@@ -755,21 +823,19 @@ function Lamp({ x, z, rotY }: { x: number; z: number; rotY: number }) {
 }
 
 function DecorStone({
-  meshName,
   position,
   scale,
   rotationY,
+  seed,
 }: {
-  meshName: string;
   position: [number, number, number];
   scale: number;
   rotationY: number;
+  seed: number;
 }) {
-  const stone = useStoneMesh(meshName);
-  if (!stone) return null;
   return (
-    <group position={position} scale={scale} rotation={[0, rotationY, 0]}>
-      <primitive object={stone} />
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <SmallRock seed={seed} scale={scale} />
     </group>
   );
 }
@@ -930,8 +996,8 @@ function PlayerController({
     const player = playerRef.current;
     if (!player || pausedRef.current) return;
 
-    const accel = 30;
-    const maxSpeed = 7.5;
+    const accel = 34;
+    const maxSpeed = 8.5;
     const damp = Math.pow(0.84, delta * 60);
     const input = new Vector3(
       (keys.current.right ? 1 : 0) - (keys.current.left ? 1 : 0),
@@ -964,7 +1030,7 @@ function PlayerController({
       const dx = player.position.x - landmark.position[0];
       const dz = player.position.z - landmark.position[2];
       const dist = Math.hypot(dx, dz);
-      const minDist = 1.35;
+      const minDist = 1.8;
       if (dist < minDist && dist > 0.001) {
         const push = (minDist - dist) / minDist;
         player.position.x += (dx / dist) * push * 0.4;
@@ -1047,12 +1113,12 @@ function WorldContents({
       <NameMonument />
 
       {/* fences frame the name monument clearing */}
-      <Fence position={[-6.2, 0, -7.2]} rotationY={0.35} />
-      <Fence position={[6.2, 0, -7.2]} rotationY={-0.35} />
+      <Fence position={[-9.4, 0, -6.6]} rotationY={0.35} />
+      <Fence position={[9.4, 0, -6.6]} rotationY={-0.35} />
 
-      <Crate position={[10.8, 0, 8.2]} rotationY={0.3} />
-      <Crate position={[11.6, 0, 7.5]} rotationY={-0.4} scale={0.85} />
-      <Crate position={[11.1, 0.84, 7.9]} rotationY={0.9} scale={0.75} />
+      <Crate position={[13.5, 0, 10.2]} rotationY={0.3} />
+      <Crate position={[14.3, 0, 9.5]} rotationY={-0.4} scale={0.85} />
+      <Crate position={[13.8, 0.84, 9.9]} rotationY={0.9} scale={0.75} />
 
       {bushPlacements.map((bush, index) => (
         <Bush key={index} position={bush.position} scale={bush.scale} />
@@ -1068,11 +1134,11 @@ function WorldContents({
 
       {knowMeDecorStones.map((prop, index) => (
         <DecorStone
-          key={`${prop.mesh}-${index}`}
-          meshName={prop.mesh}
+          key={index}
           position={prop.position}
           scale={prop.scale}
           rotationY={prop.rotationY}
+          seed={prop.seed}
         />
       ))}
 
@@ -1126,7 +1192,7 @@ export function KnowMeWorldScene({
       gl={{ antialias: true, alpha: false }}
     >
       <color attach="background" args={[NIGHT_BG]} />
-      <fog attach="fog" args={[NIGHT_BG, 28, 66]} />
+      <fog attach="fog" args={[NIGHT_BG, 32, 85]} />
 
       <ambientLight color="#d9c4ff" intensity={0.32} />
       <hemisphereLight args={["#c77aff", "#12041f", 0.4]} />
@@ -1135,11 +1201,11 @@ export function KnowMeWorldScene({
         color="#ffa8d4"
         position={[12, 18, 8]}
         intensity={1.15}
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-32}
-        shadow-camera-right={32}
-        shadow-camera-top={32}
-        shadow-camera-bottom={-32}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-42}
+        shadow-camera-right={42}
+        shadow-camera-top={42}
+        shadow-camera-bottom={-42}
       />
 
       <Stars radius={60} depth={24} count={1400} factor={3.2} fade speed={0.5} />
@@ -1163,5 +1229,4 @@ export function KnowMeWorldScene({
 }
 
 useGLTF.preload(KNOWME_AVATAR_PATH);
-useGLTF.preload(KNOWME_STONES_PATH);
 useFBX.preload(careerModelAnimations.idle);
