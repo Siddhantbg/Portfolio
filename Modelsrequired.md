@@ -9,11 +9,18 @@ tell me, and I'll wire them into the scene.
 
 ---
 
-## 0. Environment map — THE big one (yes, bring this!)
+## 0. Environment map — ✅ DELIVERED
 
-You asked whether to bring a full map model from the internet: **yes.** A single
-environment GLB replaces my procedural grass/paths/trees with a real modelled world
-(like Bruno's island) and is the single biggest visual upgrade possible.
+**Done!** Kakariko Village (Ocarina of Time) by XanderPriest281 is converted to
+`public/models/knowme/map.glb` and wired into the world with terrain-following
+movement. Attribution (required by its CC-BY-4.0 license) is shown in-game and kept
+in `public/models/knowme/map-license.txt`.
+
+> Note: `etihad_stadium.zip` was also found in the models folder but it's **64 MB —
+> way too heavy** for a web loading screen. It has not been used and zips are now
+> git-ignored. If you want a stadium in the world, bring a low-poly one under ~20 MB.
+
+The original spec, if you ever want to swap the map:
 
 | File to add | Put it exactly here |
 |---|---|
@@ -44,18 +51,11 @@ whichever procedural pieces it replaces.
 
 ---
 
-## 1. Character animations (highest impact)
+## 1. Character animations — ✅ DELIVERED
 
-The avatar currently plays its *idle* animation while walking. A real walk/run cycle
-would make movement look dramatically better.
-
-| File to add | Put it exactly here | Where to get it |
-|---|---|---|
-| `walking.fbx` | `public/models/animations/walking.fbx` | [mixamo.com](https://www.mixamo.com) → search **"Walking"** → download *without skin*, 30 fps |
-| `running.fbx` | `public/models/animations/running.fbx` | [mixamo.com](https://www.mixamo.com) → search **"Running"** → download *without skin*, 30 fps |
-
-Mixamo settings when downloading: **Format:** FBX Binary · **Skin:** Without Skin ·
-**Frames per Second:** 30 · **Keyframe Reduction:** None.
+**Done!** Your `Walking.fbx` and `Running.fbx` were moved to
+`public/models/animations/` and wired up: the avatar now idles when still, walks when
+moving, and breaks into a run at high speed (animation speed scales with movement).
 
 ## 2. Village props (Bruno-Simon vibe)
 

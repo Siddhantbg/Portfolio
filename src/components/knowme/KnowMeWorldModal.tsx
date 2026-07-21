@@ -3,7 +3,11 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { useProgress } from "@react-three/drei";
-import { knowMeWorldMeta, type KnowMeLandmark } from "@/data/knowMeWorld";
+import {
+  KNOWME_MAP_CREDIT,
+  knowMeWorldMeta,
+  type KnowMeLandmark,
+} from "@/data/knowMeWorld";
 import { playUiSelectSound } from "@/lib/sfx";
 
 const KnowMeWorldScene = dynamic(
@@ -147,6 +151,10 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
                 <span className="knowme-night-prompt-key">⏎</span>
                 OPEN {nearest.label.toUpperCase()}
               </div>
+            )}
+
+            {started && (
+              <p className="knowme-night-credit">{KNOWME_MAP_CREDIT}</p>
             )}
 
             {active && (

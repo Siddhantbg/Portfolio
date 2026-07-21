@@ -3411,6 +3411,19 @@ body {
   }
 }
 
+/* Map attribution (CC-BY requirement) */
+.knowme-night-credit {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  z-index: 3;
+  margin: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.03em;
+  color: rgba(255, 217, 196, 0.55);
+  pointer-events: none;
+}
+
 /* Near-landmark prompt */
 .knowme-night-prompt {
   position: absolute;

@@ -36,6 +36,9 @@ yarn-error.log*
 # local secrets — never commit
 Token.txt
 
+# raw model archives — only converted .glb files belong in the repo
+/public/models/**/*.zip
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
