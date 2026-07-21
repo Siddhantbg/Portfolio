@@ -17,6 +17,8 @@ export interface KnowMeLandmark {
  * Walk near one and press Enter to open it.
  */
 export const knowMeLandmarks: KnowMeLandmark[] = [
+  // Positions leave the northern corridor (x ±8, z -12..-7) clear
+  // for the 3D name monument — no stones or paths cross it.
   {
     id: "shl",
     label: "SHL Recommender",
@@ -24,7 +26,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "shl-recommender")?.links.github ??
       profile.github,
-    position: [-9, 0, -6],
+    position: [-16, 0, -6],
     stoneMesh: "Stone_1_Low",
     stoneScale: 0.045,
     stoneRotationY: 0.4,
@@ -36,7 +38,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "ai-code-review")?.links.github ??
       profile.github,
-    position: [9.5, 0, -5.5],
+    position: [19, 0, 3],
     stoneMesh: "Stone_2_Low",
     stoneScale: 0.05,
     stoneRotationY: 1.2,
@@ -48,7 +50,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "medical-ai")?.links.github ??
       profile.github,
-    position: [-10, 0, 6.5],
+    position: [-19, 0, 4],
     stoneMesh: "Stone_3_Low",
     stoneScale: 0.042,
     stoneRotationY: 2.1,
@@ -60,7 +62,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "cnn-quantization")?.links.github ??
       profile.github,
-    position: [9, 0, 7],
+    position: [11, 0, 15],
     stoneMesh: "Stone_4_Low",
     stoneScale: 0.048,
     stoneRotationY: 0.8,
@@ -70,7 +72,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     label: "GitHub",
     subtitle: "All repos · Siddhantbg",
     href: profile.github,
-    position: [0, 0, -11.5],
+    position: [16, 0, -7],
     stoneMesh: "Stone_5_Low",
     stoneScale: 0.052,
     stoneRotationY: 1.5,
@@ -80,7 +82,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     label: "LinkedIn",
     subtitle: "Connect · hire path",
     href: profile.linkedin,
-    position: [0.5, 0, 11.5],
+    position: [-10, 0, 16],
     stoneMesh: "Stone_1_Low.001",
     stoneScale: 0.05,
     stoneRotationY: 2.8,
@@ -95,18 +97,24 @@ export const knowMeWorldMeta = {
 
 /** Decorative low-poly trees [x, z, scale, hueShift] */
 export const knowMeTrees: Array<[number, number, number, number]> = [
-  [-14, -12, 1.4, 0],
-  [-11.5, -13.5, 1.1, 0.35],
-  [13, -12.5, 1.5, 0.6],
-  [15, -9, 1.0, 0.2],
-  [-15.5, 3, 1.25, 0.5],
-  [-13.5, 12, 1.45, 0.15],
-  [14.5, 11, 1.2, 0.4],
-  [12, 14, 1.55, 0.7],
-  [3.5, -15, 1.3, 0.25],
-  [-4, 15.5, 1.15, 0.55],
-  [-6.5, -15, 1.05, 0.8],
-  [7, 15, 1.35, 0.1],
+  [-14, -13, 1.4, 0],
+  [-20, -2, 1.1, 0.35],
+  [-22, 8, 1.5, 0.6],
+  [-8, -20, 1.0, 0.2],
+  [-16, 14, 1.25, 0.5],
+  [-6, 20, 1.45, 0.15],
+  [4, 22, 1.2, 0.4],
+  [14, 18, 1.55, 0.7],
+  [21, 12, 1.3, 0.25],
+  [23, 2, 1.15, 0.55],
+  [20, -10, 1.05, 0.8],
+  [10, -20, 1.35, 0.1],
+  [3, -16, 1.2, 0.45],
+  [-3, -22, 1.4, 0.3],
+  [-24, -6, 1.1, 0.65],
+  [24, 7, 1.25, 0.05],
+  [-12, 22, 1.35, 0.75],
+  [8, -23, 1.15, 0.5],
 ];
 
 /** Decorative small rocks [x, z, scale, rotY, meshName] */
@@ -116,20 +124,24 @@ export const knowMeDecorStones: Array<{
   rotationY: number;
   mesh: string;
 }> = [
-  { position: [-4.5, 0, -3], scale: 0.014, rotationY: 0.9, mesh: "Stone_2_Low.001" },
-  { position: [5, 0, 2.5], scale: 0.016, rotationY: 2.2, mesh: "Stone_3_Low.001" },
-  { position: [-2, 0, 6], scale: 0.012, rotationY: 1.1, mesh: "Stone_4_Low.001" },
-  { position: [3, 0, -7], scale: 0.015, rotationY: 0.3, mesh: "Stone_5_Low.001" },
-  { position: [-7.5, 0, 0.5], scale: 0.013, rotationY: 2.9, mesh: "Stone_1_Low.002" },
-  { position: [7.5, 0, -1.5], scale: 0.014, rotationY: 1.8, mesh: "Stone_2_Low.002" },
+  { position: [-6, 0, -4], scale: 0.014, rotationY: 0.9, mesh: "Stone_2_Low.001" },
+  { position: [7, 0, 3], scale: 0.016, rotationY: 2.2, mesh: "Stone_3_Low.001" },
+  { position: [-3, 0, 8], scale: 0.012, rotationY: 1.1, mesh: "Stone_4_Low.001" },
+  { position: [11, 0, -11], scale: 0.015, rotationY: 0.3, mesh: "Stone_5_Low.001" },
+  { position: [-9, 0, 1], scale: 0.013, rotationY: 2.9, mesh: "Stone_1_Low.002" },
+  { position: [9, 0, -2], scale: 0.014, rotationY: 1.8, mesh: "Stone_2_Low.002" },
+  { position: [-13, 0, 10], scale: 0.015, rotationY: 0.6, mesh: "Stone_3_Low.002" },
+  { position: [2, 0, 13], scale: 0.012, rotationY: 2.4, mesh: "Stone_4_Low.002" },
 ];
 
-/** Lamp posts [x, z, rotY] */
+/** Lamp posts [x, z, rotY] — roughly along the paths */
 export const knowMeLamps: Array<[number, number, number]> = [
-  [-3.2, -2.2, 0.8],
-  [4, 4.2, -2.2],
-  [-6, 8.5, 1.6],
-  [6.5, -8.5, 0.4],
+  [-8, -3, 0.8],
+  [8, -3.5, -2.2],
+  [5.5, 7.5, 1.6],
+  [-5, 8, 0.4],
+  [-9.5, 2, 2.1],
+  [9.5, 1.5, -0.6],
 ];
 
 export const KNOWME_AVATAR_PATH = "/models/animations/Developer.glb";
@@ -137,5 +149,5 @@ export const KNOWME_STONES_PATH = "/models/knowme/stones.glb";
 export const KNOWME_HAND_FONT = "/fonts/AmaticSC-Bold.ttf";
 export const KNOWME_TITLE_FONT = "/fonts/helvetiker_bold.typeface.json";
 
-export const MAP_RADIUS = 17;
-export const LANDMARK_ENTER_RADIUS = 2.6;
+export const MAP_RADIUS = 26;
+export const LANDMARK_ENTER_RADIUS = 2.8;

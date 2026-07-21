@@ -3272,7 +3272,7 @@ body {
   flex: 1;
   min-height: 0;
   height: 100%;
-  background: #06101f;
+  background: #170929;
 }
 
 .knowme-world-canvas {
@@ -3302,82 +3302,41 @@ body {
   border-color: #9ed0ff;
 }
 
-/* ── KNOW ME · Night World ─────────────────────────────────── */
+/* ── KNOW ME · Night World (fullscreen) ────────────────────── */
 
-.knowme-night-panel {
-  background: #12040d;
-  border: 1px solid rgba(255, 138, 61, 0.35);
-  box-shadow:
-    0 0 0 1px rgba(255, 106, 61, 0.12),
-    0 24px 80px rgba(0, 0, 0, 0.7);
-  border-radius: 14px;
+.knowme-night-backdrop {
+  padding: 0;
 }
 
-.knowme-night-close {
-  background: rgba(255, 244, 236, 0.08);
-  border: 1px solid rgba(255, 138, 61, 0.4);
-  border-radius: 8px;
-  color: #ffd9c4;
-}
-
-.knowme-night-close:hover {
-  background: rgba(255, 138, 61, 0.22);
-}
-
-.knowme-night-frame {
-  display: flex;
-  flex-direction: column;
-  height: min(82vh, 680px);
-  min-height: 420px;
+.knowme-night-fullscreen {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  border-radius: 10px;
-  background: #1d0716;
+  background: #170929;
 }
 
-.knowme-night-hud {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.65rem 3.2rem 0.65rem 1rem;
-  background: linear-gradient(180deg, #2a0b1d 0%, #1d0716 100%);
-  border-bottom: 1px solid rgba(255, 138, 61, 0.25);
-}
-
-.knowme-night-kicker {
-  margin: 0;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: #ff8a3d;
-}
-
-.knowme-night-title {
-  margin: 0.15rem 0 0;
-  font-family: var(--font-barlow), sans-serif;
-  font-size: clamp(1rem, 2vw, 1.3rem);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #fff4ec;
-}
-
-.knowme-night-chip {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.knowme-night-exit {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  line-height: 1;
   color: #ffd9c4;
-  background: rgba(255, 106, 61, 0.12);
-  border: 1px solid rgba(255, 138, 61, 0.35);
-  border-radius: 999px;
-  white-space: nowrap;
+  background: rgba(23, 9, 41, 0.72);
+  border: 1px solid rgba(255, 138, 61, 0.45);
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-.knowme-night-chip strong {
-  color: #fff;
-  margin-left: 0.25rem;
+.knowme-night-exit:hover {
+  background: rgba(255, 138, 61, 0.28);
 }
 
 /* Click-to-start overlay — hand-drawn note over the idle world */

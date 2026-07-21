@@ -104,46 +104,27 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
 
   return (
     <div
-      className="knowme-modal-backdrop"
+      className="knowme-modal-backdrop knowme-night-backdrop"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="knowme-modal-panel knowme-world-panel knowme-night-panel"
+        className="knowme-night-fullscreen"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="knowme-modal-title"
+        aria-label={knowMeWorldMeta.title}
         onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
-          className="knowme-modal-close knowme-night-close"
+          className="knowme-night-exit"
           onClick={onClose}
           aria-label="Close"
         >
           ×
         </button>
 
-        <div className="knowme-night-frame">
-          <header className="knowme-night-hud">
-            <div>
-              <p className="knowme-night-kicker">3D Night World</p>
-              <h2 id="knowme-modal-title" className="knowme-night-title">
-                {knowMeWorldMeta.title}
-              </h2>
-            </div>
-            <span className="knowme-night-chip">
-              {nearest ? (
-                <>
-                  Near <strong>{nearest.label}</strong>
-                </>
-              ) : (
-                <>{knowMeWorldMeta.controls}</>
-              )}
-            </span>
-          </header>
-
-          <div className="knowme-world-stage">
+        <div className="knowme-world-stage">
             <KnowMeWorldScene
               started={started}
               paused={!started || active !== null}
@@ -209,7 +190,6 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
                 </div>
               </div>
             )}
-          </div>
         </div>
       </div>
     </div>
