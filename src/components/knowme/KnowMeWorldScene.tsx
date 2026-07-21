@@ -5,24 +5,31 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type RefObject,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Billboard,
+  Center,
   Environment,
   Stars,
   Text,
+  Text3D,
   useAnimations,
   useFBX,
   useGLTF,
+  useProgress,
 } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   CanvasTexture,
   Color,
+  DynamicDrawUsage,
   Group,
+  InstancedMesh,
   LoopRepeat,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -34,6 +41,7 @@ import {
   KNOWME_AVATAR_PATH,
   KNOWME_HAND_FONT,
   KNOWME_STONES_PATH,
+  KNOWME_TITLE_FONT,
   LANDMARK_ENTER_RADIUS,
   MAP_RADIUS,
   knowMeDecorStones,
@@ -42,16 +50,16 @@ import {
   knowMeTrees,
   type KnowMeLandmark,
 } from "@/data/knowMeWorld";
-import { careerModelAnimations } from "@/data/portfolio";
+import { careerModelAnimations, profile } from "@/data/portfolio";
 import { buildSafeClips } from "@/lib/safe-model-clips";
 
 /* ------------------------------------------------------------------ */
-/* Palette — deep plum night with warm ember accents (Bruno-inspired) */
+/* Palette — violet loading void, purple-lit grassy world after start  */
 /* ------------------------------------------------------------------ */
-const NIGHT_BG = "#1d0716";
-const GROUND_BASE = "#2a0b1d";
+const NIGHT_BG = "#170929";
 const EMBER = "#ff6a3d";
 const GLOW_WHITE = "#fff4ec";
+const ISLAND_RADIUS = MAP_RADIUS + 3;
 
 function prepareShadows(root: Object3D) {
   root.traverse((child) => {
@@ -72,9 +80,9 @@ function prepareShadows(root: Object3D) {
 }
 
 /* ------------------------------------------------------------ */
-/* Ground — grid + little × marks, like a dark training ground   */
+/* Loader floor — infinite violet grid with × marks (image ref)  */
 /* ------------------------------------------------------------ */
-function useGroundTexture() {
+function useGridTexture() {
   return useMemo(() => {
     const size = 512;
     const cell = 128;
@@ -83,10 +91,10 @@ function useGroundTexture() {
     canvas.height = size;
     const ctx = canvas.getContext("2d")!;
 
-    ctx.fillStyle = GROUND_BASE;
+    ctx.fillStyle = "#1e0d38";
     ctx.fillRect(0, 0, size, size);
 
-    ctx.strokeStyle = "rgba(255, 140, 175, 0.07)";
+    ctx.strokeStyle = "rgba(122, 92, 255, 0.20)";
     ctx.lineWidth = 2;
     for (let p = 0; p <= size; p += cell) {
       ctx.beginPath();
@@ -99,12 +107,12 @@ function useGroundTexture() {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = "rgba(255, 150, 185, 0.30)";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(138, 107, 255, 0.55)";
+    ctx.lineWidth = 4;
     ctx.lineCap = "round";
-    const arm = 7;
-    for (let x = 0; x <= size; x += cell) {
-      for (let y = 0; y <= size; y += cell) {
+    const arm = 8;
+    for (let x = cell / 2; x < size; x += cell) {
+      for (let y = cell / 2; y < size; y += cell) {
         ctx.beginPath();
         ctx.moveTo(x - arm, y - arm);
         ctx.lineTo(x + arm, y + arm);
@@ -117,35 +125,371 @@ function useGroundTexture() {
     const tex = new CanvasTexture(canvas);
     tex.wrapS = RepeatWrapping;
     tex.wrapT = RepeatWrapping;
-    tex.repeat.set(8, 8);
+    tex.repeat.set(24, 24);
     tex.anisotropy = 4;
     tex.colorSpace = SRGBColorSpace;
     return tex;
   }, []);
 }
 
-function Ground() {
-  const texture = useGroundTexture();
+function GridFloor() {
+  const texture = useGridTexture();
   return (
-    <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <circleGeometry args={[MAP_RADIUS + 14, 72]} />
-        <meshStandardMaterial map={texture} roughness={0.95} metalness={0.02} />
-      </mesh>
-      {/* soft boundary ring so the playable edge reads */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-        <ringGeometry args={[MAP_RADIUS - 0.14, MAP_RADIUS, 96]} />
-        <meshStandardMaterial
-          color="#5a1f3a"
-          emissive="#a2325c"
-          emissiveIntensity={0.35}
-          transparent
-          opacity={0.55}
-        />
-      </mesh>
-    </>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+      <circleGeometry args={[70, 64]} />
+      <meshStandardMaterial map={texture} roughness={0.95} metalness={0.05} />
+    </mesh>
   );
 }
+
+/* ----------------------------------------------------------------- */
+/* Loading ring — a white arc that sweeps from a point to full circle */
+/* ----------------------------------------------------------------- */
+function LoadingStage() {
+  const { progress } = useProgress();
+  const [sweep, setSweep] = useState(0);
+  const displayRef = useRef(0);
+  const targetRef = useRef(0);
+
+  useEffect(() => {
+    targetRef.current = Math.max(targetRef.current, progress);
+  }, [progress]);
+
+  useFrame((_, delta) => {
+    const target = Math.max(targetRef.current, 3);
+    displayRef.current += (target - displayRef.current) * Math.min(1, delta * 2.6);
+    const quantized = Math.min(100, Math.round(displayRef.current));
+    if (quantized !== sweep) setSweep(quantized);
+  });
+
+  const theta = (sweep / 100) * Math.PI * 2;
+
+  return (
+    <group>
+      {/* faint full track */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <ringGeometry args={[2.92, 3.06, 96]} />
+        <meshBasicMaterial
+          color="#7a5cff"
+          transparent
+          opacity={0.18}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* progress arc — grows clockwise from 12 o'clock */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+        <ringGeometry args={[2.88, 3.1, 96, 1, Math.PI / 2, theta]} />
+        <meshBasicMaterial color="#ffffff" toneMapped={false} />
+      </mesh>
+
+      <Text
+        font={KNOWME_HAND_FONT}
+        position={[0, 0.03, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={1.15}
+        color="#ffffff"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {`${sweep}%`}
+      </Text>
+      <Text
+        font={KNOWME_HAND_FONT}
+        position={[0, 0.03, 4.35]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.62}
+        color="#b9a5ff"
+        anchorX="center"
+        anchorY="middle"
+      >
+        LOADING WORLD
+      </Text>
+    </group>
+  );
+}
+
+/* ------------------------------------------------------------------- */
+/* Grass island — baked texture: grass, tiled plaza, paths to landmarks */
+/* ------------------------------------------------------------------- */
+function useGrassTexture() {
+  return useMemo(() => {
+    const size = 1024;
+    const scale = size / (ISLAND_RADIUS * 2);
+    const toPx = (u: number) => size / 2 + u * scale;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+
+    ctx.fillStyle = "#57813f";
+    ctx.fillRect(0, 0, size, size);
+
+    // mottled grass speckles
+    for (let i = 0; i < 4200; i += 1) {
+      const x = Math.random() * size;
+      const y = Math.random() * size;
+      const light = Math.random() > 0.5;
+      ctx.fillStyle = light
+        ? "rgba(140, 178, 96, 0.22)"
+        : "rgba(46, 74, 34, 0.25)";
+      const r = 1.5 + Math.random() * 3;
+      ctx.fillRect(x, y, r, r);
+    }
+
+    const drawTile = (
+      cx: number,
+      cy: number,
+      angle: number,
+      w: number,
+      h: number,
+    ) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      const jitter = (Math.random() - 0.5) * 14;
+      ctx.fillStyle = `rgb(${122 + jitter}, ${100 + jitter}, ${134 + jitter})`;
+      ctx.fillRect(-w / 2, -h / 2, w, h);
+      ctx.restore();
+    };
+
+    // central plaza of tiles
+    const plazaR = 4.1;
+    const step = 0.95;
+    for (let gx = -plazaR; gx <= plazaR; gx += step) {
+      for (let gz = -plazaR; gz <= plazaR; gz += step) {
+        if (Math.hypot(gx, gz) > plazaR) continue;
+        drawTile(toPx(gx), toPx(gz), 0, 0.82 * scale, 0.82 * scale);
+      }
+    }
+
+    // tiled paths from plaza to every landmark stone
+    for (const landmark of knowMeLandmarks) {
+      const [lx, , lz] = landmark.position;
+      const dist = Math.hypot(lx, lz);
+      const dirX = lx / dist;
+      const dirZ = lz / dist;
+      const angle = Math.atan2(lz, lx);
+      for (let d = plazaR - 0.2; d < dist - 2.3; d += 1.0) {
+        const off = (Math.random() - 0.5) * 0.14;
+        const px = toPx(dirX * d - dirZ * off);
+        const py = toPx(dirZ * d + dirX * off);
+        drawTile(px, py, angle, 0.86 * scale, 1.5 * scale);
+      }
+    }
+
+    const tex = new CanvasTexture(canvas);
+    tex.anisotropy = 4;
+    tex.colorSpace = SRGBColorSpace;
+    return tex;
+  }, []);
+}
+
+function GrassIsland() {
+  const texture = useGrassTexture();
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} receiveShadow>
+      <circleGeometry args={[ISLAND_RADIUS, 80]} />
+      <meshStandardMaterial map={texture} roughness={0.95} metalness={0.02} />
+    </mesh>
+  );
+}
+
+/* ---------------------------------------------- */
+/* Instanced grass tufts scattered over the island */
+/* ---------------------------------------------- */
+function distanceToPath(x: number, z: number) {
+  let min = Infinity;
+  for (const landmark of knowMeLandmarks) {
+    const [lx, , lz] = landmark.position;
+    const dist = Math.hypot(lx, lz);
+    const dirX = lx / dist;
+    const dirZ = lz / dist;
+    const along = x * dirX + z * dirZ;
+    if (along < 3.4 || along > dist) continue;
+    const perp = Math.abs(x * -dirZ + z * dirX);
+    min = Math.min(min, perp);
+  }
+  return min;
+}
+
+function GrassTufts({ count = 1300 }: { count?: number }) {
+  const meshRef = useRef<InstancedMesh>(null);
+
+  const placements = useMemo(() => {
+    const list: Array<{ x: number; z: number; s: number; rot: number; shade: number }> = [];
+    let guard = 0;
+    while (list.length < count && guard < count * 12) {
+      guard += 1;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 3.6 + Math.sqrt(Math.random()) * (ISLAND_RADIUS - 4.2);
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      if (distanceToPath(x, z) < 1.15) continue;
+      const nearLandmark = knowMeLandmarks.some(
+        (l) => Math.hypot(x - l.position[0], z - l.position[2]) < 2.4,
+      );
+      if (nearLandmark) continue;
+      list.push({
+        x,
+        z,
+        s: 0.7 + Math.random() * 0.9,
+        rot: Math.random() * Math.PI,
+        shade: Math.random(),
+      });
+    }
+    return list;
+  }, [count]);
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const matrix = new Matrix4();
+    const dummy = new Object3D();
+    const colorA = new Color("#6f9b52");
+    const colorB = new Color("#44672f");
+    const mixed = new Color();
+    placements.forEach((p, i) => {
+      dummy.position.set(p.x, 0.16 * p.s, p.z);
+      dummy.rotation.set(0, p.rot, 0);
+      dummy.scale.setScalar(p.s);
+      dummy.updateMatrix();
+      matrix.copy(dummy.matrix);
+      mesh.setMatrixAt(i, matrix);
+      mixed.copy(colorA).lerp(colorB, p.shade);
+      mesh.setColorAt(i, mixed);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) {
+      mesh.instanceColor.setUsage(DynamicDrawUsage);
+      mesh.instanceColor.needsUpdate = true;
+    }
+  }, [placements]);
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, placements.length]}
+      frustumCulled={false}
+    >
+      <coneGeometry args={[0.09, 0.42, 4]} />
+      <meshStandardMaterial roughness={0.9} flatShading />
+    </instancedMesh>
+  );
+}
+
+/* ---------------------------------------------- */
+/* Big extruded name — like the BRUNO SIMON text   */
+/* ---------------------------------------------- */
+function NameMonument() {
+  return (
+    <Center position={[0, 0, 6.4]} disableY>
+      <Text3D
+        font={KNOWME_TITLE_FONT}
+        size={1.5}
+        height={0.55}
+        bevelEnabled
+        bevelThickness={0.045}
+        bevelSize={0.035}
+        bevelSegments={3}
+        curveSegments={8}
+        castShadow
+      >
+        {profile.name}
+        <meshStandardMaterial
+          color="#8b7cf8"
+          roughness={0.55}
+          metalness={0.1}
+        />
+      </Text3D>
+    </Center>
+  );
+}
+
+/* --------------------------- */
+/* Wooden props — fence, crate */
+/* --------------------------- */
+function Fence({
+  position,
+  rotationY,
+}: {
+  position: [number, number, number];
+  rotationY: number;
+}) {
+  const wood = "#7a4468";
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      {[-1.1, 1.1].map((x) => (
+        <mesh key={x} castShadow position={[x, 0.5, 0]}>
+          <boxGeometry args={[0.16, 1.0, 0.16]} />
+          <meshStandardMaterial color={wood} roughness={0.85} />
+        </mesh>
+      ))}
+      {[0.42, 0.78].map((y) => (
+        <mesh key={y} castShadow position={[0, y, 0]}>
+          <boxGeometry args={[2.5, 0.13, 0.08]} />
+          <meshStandardMaterial color={wood} roughness={0.85} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Crate({
+  position,
+  rotationY,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  rotationY: number;
+  scale?: number;
+}) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
+      <mesh castShadow position={[0, 0.42, 0]}>
+        <boxGeometry args={[0.84, 0.84, 0.84]} />
+        <meshStandardMaterial color="#8a4438" roughness={0.8} />
+      </mesh>
+      {[-0.28, 0.28].map((y) => (
+        <mesh key={y} castShadow position={[0, 0.42 + y, 0]}>
+          <boxGeometry args={[0.88, 0.12, 0.88]} />
+          <meshStandardMaterial color="#5c2a22" roughness={0.85} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Bush({
+  position,
+  scale,
+}: {
+  position: [number, number, number];
+  scale: number;
+}) {
+  return (
+    <mesh castShadow position={position} scale={[scale, scale * 0.72, scale]}>
+      <icosahedronGeometry args={[0.6, 1]} />
+      <meshStandardMaterial
+        color="#c9558a"
+        emissive="#c9558a"
+        emissiveIntensity={0.08}
+        roughness={0.9}
+        flatShading
+      />
+    </mesh>
+  );
+}
+
+const bushPlacements: Array<{ position: [number, number, number]; scale: number }> = [
+  { position: [-5.6, 0.3, 4.2], scale: 1.1 },
+  { position: [6.2, 0.25, 3.2], scale: 0.9 },
+  { position: [-7.8, 0.3, -3.4], scale: 1.2 },
+  { position: [7.4, 0.28, -3.8], scale: 1.0 },
+  { position: [-3.2, 0.24, -8.4], scale: 0.85 },
+  { position: [3.8, 0.3, 9.2], scale: 1.15 },
+  { position: [-11.2, 0.26, 1.8], scale: 0.9 },
+  { position: [11.6, 0.3, 1.2], scale: 1.05 },
+];
 
 /* ---------------------------------------------- */
 /* Player avatar — the Developer model, idling     */
@@ -248,7 +592,7 @@ function LandmarkStone({
   return (
     <group position={landmark.position}>
       {/* glow ring on the ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
         <ringGeometry args={[1.75, 1.95, 56]} />
         <meshStandardMaterial
           ref={ringMat}
@@ -260,7 +604,7 @@ function LandmarkStone({
           opacity={0.95}
         />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
         <circleGeometry args={[1.75, 56]} />
         <meshStandardMaterial
           ref={fillMat}
@@ -303,7 +647,7 @@ function LandmarkStone({
         <Text
           font={KNOWME_HAND_FONT}
           fontSize={0.36}
-          color={active ? "#ffe6d6" : "#c98da0"}
+          color={active ? "#ffe6d6" : "#e5b9c8"}
           anchorX="center"
           anchorY="top"
           position={[0, -0.06, 0]}
@@ -332,8 +676,8 @@ function Tree({
   hueShift: number;
 }) {
   const foliage = useMemo(() => {
-    const base = new Color("#e8395a");
-    return base.offsetHSL(hueShift * 0.045, 0, hueShift * 0.04);
+    const base = new Color("#d9598a");
+    return base.offsetHSL(hueShift * 0.05, 0.02, hueShift * 0.05);
   }, [hueShift]);
 
   return (
@@ -381,7 +725,7 @@ function Lamp({ x, z, rotY }: { x: number; z: number; rotY: number }) {
     <group position={[x, 0, z]} rotation={[0, rotY, 0]}>
       <mesh castShadow position={[0, 1.1, 0]}>
         <boxGeometry args={[0.16, 2.2, 0.16]} />
-        <meshStandardMaterial color="#3a1224" roughness={0.8} />
+        <meshStandardMaterial color="#3a1235" roughness={0.8} />
       </mesh>
       <mesh position={[0, 2.05, 0]}>
         <boxGeometry args={[0.44, 0.5, 0.3]} />
@@ -428,7 +772,7 @@ function DecorStone({
 function SpawnArea() {
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
         <ringGeometry args={[3.1, 3.24, 72]} />
         <meshStandardMaterial
           color={GLOW_WHITE}
@@ -440,9 +784,9 @@ function SpawnArea() {
       </mesh>
       <Text
         font={KNOWME_HAND_FONT}
-        position={[0, 0.03, 4.6]}
+        position={[0, 0.04, -5.6]}
         rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.85}
+        fontSize={0.78}
         color="#ffffff"
         anchorX="center"
         anchorY="middle"
@@ -450,42 +794,46 @@ function SpawnArea() {
         outlineWidth={0.02}
         outlineColor={NIGHT_BG}
       >
-        {"USE WASD / ARROWS\nTO WALK"}
-      </Text>
-      <Text
-        font={KNOWME_HAND_FONT}
-        position={[0, 0.03, -4.4]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.66}
-        color="#ffd9c4"
-        anchorX="center"
-        anchorY="middle"
-        textAlign="center"
-        outlineWidth={0.02}
-        outlineColor={NIGHT_BG}
-      >
-        {"WALK TO A GLOWING STONE\nPRESS ENTER TO OPEN"}
+        {"USE WASD / ARROWS TO WALK\nENTER OPENS A GLOWING STONE"}
       </Text>
     </group>
   );
 }
 
 /* --------------------------------------- */
-/* Camera follows the player from behind    */
+/* Cameras                                  */
 /* --------------------------------------- */
+function LoaderCamera() {
+  const { camera } = useThree();
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime * 0.08;
+    camera.position.set(
+      Math.sin(t) * 1.2 + 10.5,
+      8.2,
+      Math.cos(t) * 1.2 + 10.5,
+    );
+    camera.lookAt(0, 0, 0);
+  });
+  return null;
+}
+
 function FollowCamera({ target }: { target: RefObject<Group | null> }) {
   const { camera } = useThree();
-  const current = useRef(new Vector3(0, 9, 12));
+  const current = useRef<Vector3 | null>(null);
 
   useFrame(() => {
     const player = target.current;
     if (!player) return;
+    if (!current.current) {
+      // glide in from wherever the loader camera left off
+      current.current = camera.position.clone();
+    }
     const desired = new Vector3(
       player.position.x,
       player.position.y + 8,
       player.position.z + 10.5,
     );
-    current.current.lerp(desired, 0.07);
+    current.current.lerp(desired, 0.06);
     camera.position.copy(current.current);
     camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
   });
@@ -668,11 +1016,13 @@ function PlayerController({
 /* Full 3D world  */
 /* -------------- */
 function WorldContents({
+  visible,
   paused,
   onNearestChange,
   onActivate,
   nearestId,
 }: {
+  visible: boolean;
   paused: boolean;
   onNearestChange: (landmark: KnowMeLandmark | null) => void;
   onActivate: (landmark: KnowMeLandmark) => void;
@@ -682,28 +1032,22 @@ function WorldContents({
   const innerRef = useRef<Group>(null);
 
   return (
-    <>
-      <color attach="background" args={[NIGHT_BG]} />
-      <fog attach="fog" args={[NIGHT_BG, 22, 46]} />
-
-      <ambientLight color="#ffd9e4" intensity={0.3} />
-      <hemisphereLight args={["#ff7aa2", "#12030c", 0.4]} />
-      <directionalLight
-        castShadow
-        color="#ff9ec4"
-        position={[12, 18, 8]}
-        intensity={1.1}
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-22}
-        shadow-camera-right={22}
-        shadow-camera-top={22}
-        shadow-camera-bottom={-22}
-      />
-
-      <Stars radius={55} depth={22} count={1400} factor={3.2} fade speed={0.5} />
-
-      <Ground />
+    <group visible={visible}>
+      <GrassIsland />
+      <GrassTufts />
       <SpawnArea />
+      <NameMonument />
+
+      <Fence position={[-4.8, 0, -1.6]} rotationY={1.2} />
+      <Fence position={[4.8, 0, -1.4]} rotationY={-1.2} />
+
+      <Crate position={[7.6, 0, 5.4]} rotationY={0.3} />
+      <Crate position={[8.4, 0, 4.7]} rotationY={-0.4} scale={0.85} />
+      <Crate position={[7.9, 0.84, 5.1]} rotationY={0.9} scale={0.75} />
+
+      {bushPlacements.map((bush, index) => (
+        <Bush key={index} position={bush.position} scale={bush.scale} />
+      ))}
 
       {knowMeLandmarks.map((landmark) => (
         <LandmarkStone
@@ -740,18 +1084,17 @@ function WorldContents({
       <PlayerController
         playerRef={playerRef}
         innerRef={innerRef}
-        paused={paused}
+        paused={paused || !visible}
         onNearestChange={onNearestChange}
         onActivate={onActivate}
       />
-      <FollowCamera target={playerRef} />
-
-      <Environment preset="night" />
-    </>
+      {visible && <FollowCamera target={playerRef} />}
+    </group>
   );
 }
 
 interface KnowMeWorldSceneProps {
+  started: boolean;
   paused?: boolean;
   onNearestChange: (landmark: KnowMeLandmark | null) => void;
   onActivate: (landmark: KnowMeLandmark) => void;
@@ -759,6 +1102,7 @@ interface KnowMeWorldSceneProps {
 }
 
 export function KnowMeWorldScene({
+  started,
   paused = false,
   onNearestChange,
   onActivate,
@@ -769,16 +1113,41 @@ export function KnowMeWorldScene({
       className="knowme-world-canvas"
       shadows
       dpr={[1, 1.5]}
-      camera={{ position: [0, 9, 12], fov: 42, near: 0.1, far: 90 }}
+      camera={{ position: [10.5, 8.2, 10.5], fov: 42, near: 0.1, far: 120 }}
       gl={{ antialias: true, alpha: false }}
     >
+      <color attach="background" args={[NIGHT_BG]} />
+      <fog attach="fog" args={[NIGHT_BG, 24, 52]} />
+
+      <ambientLight color="#d9c4ff" intensity={0.32} />
+      <hemisphereLight args={["#c77aff", "#12041f", 0.4]} />
+      <directionalLight
+        castShadow
+        color="#ffa8d4"
+        position={[12, 18, 8]}
+        intensity={1.15}
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-left={-24}
+        shadow-camera-right={24}
+        shadow-camera-top={24}
+        shadow-camera-bottom={-24}
+      />
+
+      <Stars radius={60} depth={24} count={1400} factor={3.2} fade speed={0.5} />
+
+      <GridFloor />
+      {!started && <LoadingStage />}
+      {!started && <LoaderCamera />}
+
       <Suspense fallback={null}>
         <WorldContents
+          visible={started}
           paused={paused}
           onNearestChange={onNearestChange}
           onActivate={onActivate}
           nearestId={nearestId}
         />
+        <Environment preset="night" />
       </Suspense>
     </Canvas>
   );

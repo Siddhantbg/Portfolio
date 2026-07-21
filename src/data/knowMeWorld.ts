@@ -135,6 +135,7 @@ export const knowMeLamps: Array<[number, number, number]> = [
 export const KNOWME_AVATAR_PATH = "/models/animations/Developer.glb";
 export const KNOWME_STONES_PATH = "/models/knowme/stones.glb";
 export const KNOWME_HAND_FONT = "/fonts/AmaticSC-Bold.ttf";
+export const KNOWME_TITLE_FONT = "/fonts/helvetiker_bold.typeface.json";
 
 export const MAP_RADIUS = 17;
 export const LANDMARK_ENTER_RADIUS = 2.6;
