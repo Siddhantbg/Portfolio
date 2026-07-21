@@ -33,6 +33,9 @@ yarn-error.log*
 # env files
 .env*
 
+# local secrets — never commit
+Token.txt
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
