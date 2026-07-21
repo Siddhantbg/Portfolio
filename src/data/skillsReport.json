@@ -1,0 +1,128 @@
+{
+  "report": {
+    "title": "Squad Report",
+    "initials": "SB",
+    "name": "Siddhant Bhagat",
+    "subtitle": "Full-Stack Developer | AI/ML Engineer",
+    "ovr": 90,
+    "role": "Full Stack",
+    "exp": "3+ Years",
+    "value": "High Impact",
+    "focus": "Building Scalable Solutions",
+    "form": "Consistent",
+    "morale": "Passionate",
+    "keyStrength": "Problem Solving & System Design"
+  },
+  "categories": [
+    {
+      "icon": "languages",
+      "name": "Languages",
+      "skills": ["Java", "Python", "JavaScript", "SQL", "C++"]
+    },
+    {
+      "icon": "frontend",
+      "name": "Frontend",
+      "skills": ["React.js", "Next.js", "HTML", "CSS", "Tailwind CSS"]
+    },
+    {
+      "icon": "backend",
+      "name": "Backend",
+      "skills": ["Node.js", "Express.js", "Python", "REST APIs"]
+    },
+    {
+      "icon": "databases",
+      "name": "Databases",
+      "skills": ["PostgreSQL", "MongoDB", "MySQL", "SQLite"]
+    },
+    {
+      "icon": "aiml",
+      "name": "AI / ML",
+      "skills": ["Scikit-learn", "Transformers", "LangChain", "OpenAI API"]
+    },
+    {
+      "icon": "tools",
+      "name": "Tools & DevOps",
+      "skills": ["Git", "GitHub", "Docker", "Jenkins", "AWS", "VS Code"]
+    },
+    {
+      "icon": "testing",
+      "name": "Testing",
+      "skills": ["Jest", "Postman", "PyTest"]
+    },
+    {
+      "icon": "others",
+      "name": "Others",
+      "skills": ["Linux", "Figma", "Postman", "Excel"]
+    }
+  ],
+  "attributeGroups": [
+    {
+      "name": "Technical",
+      "type": "rating",
+      "attributes": [
+        { "label": "Programming", "value": 95 },
+        { "label": "Web Development", "value": 93 },
+        { "label": "Data Structures", "value": 90 },
+        { "label": "API Development", "value": 90 },
+        { "label": "Algorithms", "value": 88 },
+        { "label": "Database Design", "value": 88 },
+        { "label": "System Design", "value": 87 },
+        { "label": "Software Architecture", "value": 86 }
+      ]
+    },
+    {
+      "name": "AI / ML",
+      "type": "rating",
+      "attributes": [
+        { "label": "Machine Learning", "value": 85 },
+        { "label": "Data Analysis", "value": 85 },
+        { "label": "Deep Learning", "value": 82 },
+        { "label": "Model Deployment", "value": 83 },
+        { "label": "NLP", "value": 80 },
+        { "label": "LLM Integration", "value": 87 },
+        { "label": "Prompt Engineering", "value": 88 },
+        { "label": "RAG Pipelines", "value": 86 }
+      ]
+    },
+    {
+      "name": "Professional",
+      "type": "rating",
+      "attributes": [
+        { "label": "Problem Solving", "value": 92 },
+        { "label": "Leadership", "value": 85 },
+        { "label": "Communication", "value": 90 },
+        { "label": "Time Management", "value": 86 },
+        { "label": "Teamwork", "value": 88 },
+        { "label": "Attention to Detail", "value": 88 },
+        { "label": "Adaptability", "value": 87 },
+        { "label": "Critical Thinking", "value": 90 }
+      ]
+    },
+    {
+      "name": "Impact",
+      "type": "count",
+      "attributes": [
+        { "label": "Projects Completed", "value": "20+" },
+        { "label": "Code Commits", "value": "1K+" },
+        { "label": "Hackathons", "value": "15+" },
+        { "label": "Lines of Code", "value": "100K+" },
+        { "label": "Open Source", "value": "10+" },
+        { "label": "Technical Blogs", "value": "10+" },
+        { "label": "Clients / Users Impacted", "value": "5K+" },
+        { "label": "Certifications", "value": "8+" }
+      ]
+    },
+    {
+      "name": "Ratings",
+      "type": "rating",
+      "attributes": [
+        { "label": "Code Quality", "value": 90 },
+        { "label": "Performance", "value": 88 },
+        { "label": "Reliability", "value": 88 },
+        { "label": "Security", "value": 85 },
+        { "label": "Scalability", "value": 87 },
+        { "label": "Maintainability", "value": 89 }
+      ]
+    }
+  ]
+}
