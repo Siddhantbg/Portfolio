@@ -1,4 +1,4 @@
-# FIFA 14-Inspired Portfolio
+#Inspired Portfolio
 
 A personal portfolio website styled after the FIFA 14 main menu — glassmorphism tiles, slanted navigation tabs, stadium background, and FIFA-style attribute stats.
 
