@@ -23,16 +23,15 @@ import {
 } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
+  Box3,
   CanvasTexture,
   Color,
-  DynamicDrawUsage,
   Group,
-  InstancedMesh,
   LoopRepeat,
-  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  Raycaster,
   RepeatWrapping,
   SRGBColorSpace,
   Vector3,
@@ -40,25 +39,29 @@ import {
 import {
   KNOWME_AVATAR_PATH,
   KNOWME_HAND_FONT,
+  KNOWME_MAP_PATH,
+  KNOWME_RUN_FBX,
   KNOWME_TITLE_FONT,
+  KNOWME_WALK_FBX,
   LANDMARK_ENTER_RADIUS,
   MAP_RADIUS,
-  knowMeDecorStones,
   knowMeLamps,
   knowMeLandmarks,
-  knowMeTrees,
   type KnowMeLandmark,
 } from "@/data/knowMeWorld";
 import { careerModelAnimations, profile } from "@/data/portfolio";
 import { buildSafeClips } from "@/lib/safe-model-clips";
 
 /* ------------------------------------------------------------------ */
-/* Palette — violet loading void, purple-lit grassy world after start  */
+/* Palette — violet loading void; the village model brings its own     */
+/* colours once the world starts                                       */
 /* ------------------------------------------------------------------ */
 const NIGHT_BG = "#170929";
 const EMBER = "#ff6a3d";
 const GLOW_WHITE = "#fff4ec";
-const ISLAND_RADIUS = MAP_RADIUS + 3;
+
+/** Tune these if the village needs nudging — world units per model unit */
+const MAP_SCALE = 0.012;
 
 function prepareShadows(root: Object3D) {
   root.traverse((child) => {
@@ -66,7 +69,6 @@ function prepareShadows(root: Object3D) {
     if (!mesh.isMesh) return;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
     const materials = Array.isArray(mesh.material)
       ? mesh.material
       : [mesh.material];
@@ -79,7 +81,7 @@ function prepareShadows(root: Object3D) {
 }
 
 /* ------------------------------------------------------------ */
-/* Loader floor — infinite violet grid with × marks (image ref)  */
+/* Loader floor — infinite violet grid with × marks              */
 /* ------------------------------------------------------------ */
 function useGridTexture() {
   return useMemo(() => {
@@ -134,8 +136,8 @@ function useGridTexture() {
 function GridFloor() {
   const texture = useGridTexture();
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-      <circleGeometry args={[120, 64]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} receiveShadow>
+      <circleGeometry args={[160, 64]} />
       <meshStandardMaterial map={texture} roughness={0.95} metalness={0.05} />
     </mesh>
   );
@@ -207,349 +209,67 @@ function LoadingStage() {
   );
 }
 
-/* ------------------------------------------------------------------- */
-/* Grass island — baked texture: grass, tiled plaza, paths to landmarks */
-/* ------------------------------------------------------------------- */
-function useGrassTexture() {
-  return useMemo(() => {
-    const size = 1024;
-    const scale = size / (ISLAND_RADIUS * 2);
-    const toPx = (u: number) => size / 2 + u * scale;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d")!;
+/* ------------------------------------------------------------------ */
+/* Village map — scaled, centered, ground-aligned; provides a sampler  */
+/* so everything else can sit on the terrain                           */
+/* ------------------------------------------------------------------ */
+type GroundSampler = (x: number, z: number, fallback?: number) => number;
 
-    ctx.fillStyle = "#57813f";
-    ctx.fillRect(0, 0, size, size);
-
-    // mottled grass speckles
-    for (let i = 0; i < 4200; i += 1) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      const light = Math.random() > 0.5;
-      ctx.fillStyle = light
-        ? "rgba(140, 178, 96, 0.22)"
-        : "rgba(46, 74, 34, 0.25)";
-      const r = 1.5 + Math.random() * 3;
-      ctx.fillRect(x, y, r, r);
-    }
-
-    const drawTile = (
-      cx: number,
-      cy: number,
-      angle: number,
-      w: number,
-      h: number,
-    ) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
-      const jitter = (Math.random() - 0.5) * 14;
-      ctx.fillStyle = `rgb(${122 + jitter}, ${100 + jitter}, ${134 + jitter})`;
-      ctx.fillRect(-w / 2, -h / 2, w, h);
-      ctx.restore();
-    };
-
-    // central plaza of tiles
-    const plazaR = 4.1;
-    const step = 0.95;
-    for (let gx = -plazaR; gx <= plazaR; gx += step) {
-      for (let gz = -plazaR; gz <= plazaR; gz += step) {
-        if (Math.hypot(gx, gz) > plazaR) continue;
-        drawTile(toPx(gx), toPx(gz), 0, 0.82 * scale, 0.82 * scale);
-      }
-    }
-
-    // tiled paths from plaza to every landmark stone
-    for (const landmark of knowMeLandmarks) {
-      const [lx, , lz] = landmark.position;
-      const dist = Math.hypot(lx, lz);
-      const dirX = lx / dist;
-      const dirZ = lz / dist;
-      const angle = Math.atan2(lz, lx);
-      for (let d = plazaR - 0.2; d < dist - 2.3; d += 1.0) {
-        const off = (Math.random() - 0.5) * 0.14;
-        const px = toPx(dirX * d - dirZ * off);
-        const py = toPx(dirZ * d + dirX * off);
-        drawTile(px, py, angle, 0.86 * scale, 1.5 * scale);
-      }
-    }
-
-    const tex = new CanvasTexture(canvas);
-    tex.anisotropy = 4;
-    tex.colorSpace = SRGBColorSpace;
-    return tex;
-  }, []);
+function createGroundSampler(root: Object3D): GroundSampler {
+  const raycaster = new Raycaster();
+  const down = new Vector3(0, -1, 0);
+  const origin = new Vector3();
+  return (x, z, fallback = 0) => {
+    origin.set(x, 200, z);
+    raycaster.set(origin, down);
+    const hits = raycaster.intersectObject(root, true);
+    return hits.length > 0 ? hits[0].point.y : fallback;
+  };
 }
 
-function GrassIsland() {
-  const texture = useGrassTexture();
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} receiveShadow>
-      <circleGeometry args={[ISLAND_RADIUS, 80]} />
-      <meshStandardMaterial map={texture} roughness={0.95} metalness={0.02} />
-    </mesh>
-  );
-}
+function MapModel({ onReady }: { onReady: (sampler: GroundSampler) => void }) {
+  const { scene } = useGLTF(KNOWME_MAP_PATH);
 
-/* ---------------------------------------------- */
-/* Instanced grass tufts scattered over the island */
-/* ---------------------------------------------- */
-function distanceToPath(x: number, z: number) {
-  let min = Infinity;
-  for (const landmark of knowMeLandmarks) {
-    const [lx, , lz] = landmark.position;
-    const dist = Math.hypot(lx, lz);
-    const dirX = lx / dist;
-    const dirZ = lz / dist;
-    const along = x * dirX + z * dirZ;
-    if (along < 3.4 || along > dist) continue;
-    const perp = Math.abs(x * -dirZ + z * dirX);
-    min = Math.min(min, perp);
-  }
-  return min;
-}
-
-function GrassTufts({ count = 3600 }: { count?: number }) {
-  const meshRef = useRef<InstancedMesh>(null);
-
-  const placements = useMemo(() => {
-    const list: Array<{ x: number; z: number; s: number; rot: number; shade: number }> = [];
-    let guard = 0;
-    while (list.length < count && guard < count * 12) {
-      guard += 1;
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 3.6 + Math.sqrt(Math.random()) * (ISLAND_RADIUS - 4.2);
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      if (distanceToPath(x, z) < 1.15) continue;
-      // keep the name monument clearing tidy
-      if (Math.abs(x) < 10.5 && z > -13 && z < -6.5) continue;
-      const nearLandmark = knowMeLandmarks.some(
-        (l) => Math.hypot(x - l.position[0], z - l.position[2]) < 2.4,
-      );
-      if (nearLandmark) continue;
-      list.push({
-        x,
-        z,
-        s: 0.7 + Math.random() * 0.9,
-        rot: Math.random() * Math.PI,
-        shade: Math.random(),
-      });
-    }
-    return list;
-  }, [count]);
-
-  useEffect(() => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-    const matrix = new Matrix4();
-    const dummy = new Object3D();
-    const colorA = new Color("#6f9b52");
-    const colorB = new Color("#44672f");
-    const mixed = new Color();
-    placements.forEach((p, i) => {
-      dummy.position.set(p.x, 0.16 * p.s, p.z);
-      dummy.rotation.set(0, p.rot, 0);
-      dummy.scale.setScalar(p.s);
-      dummy.updateMatrix();
-      matrix.copy(dummy.matrix);
-      mesh.setMatrixAt(i, matrix);
-      mixed.copy(colorA).lerp(colorB, p.shade);
-      mesh.setColorAt(i, mixed);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) {
-      mesh.instanceColor.setUsage(DynamicDrawUsage);
-      mesh.instanceColor.needsUpdate = true;
-    }
-  }, [placements]);
-
-  return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, placements.length]}
-      frustumCulled={false}
-    >
-      <coneGeometry args={[0.09, 0.42, 4]} />
-      <meshStandardMaterial roughness={0.9} flatShading />
-    </instancedMesh>
-  );
-}
-
-/* ---------------------------------------------- */
-/* Big extruded name — like the BRUNO SIMON text   */
-/* ---------------------------------------------- */
-function NameMonument() {
-  // Sits in a dedicated clearing north of the spawn plaza —
-  // no stones, paths, or trees are placed in this corridor.
-  return (
-    <Center position={[0, 0, -9.5]} disableY>
-      <Text3D
-        font={KNOWME_TITLE_FONT}
-        size={1.6}
-        height={0.6}
-        bevelEnabled
-        bevelThickness={0.045}
-        bevelSize={0.035}
-        bevelSegments={3}
-        curveSegments={8}
-        castShadow
-      >
-        {profile.name}
-        <meshStandardMaterial
-          color="#8b7cf8"
-          roughness={0.55}
-          metalness={0.1}
-        />
-      </Text3D>
-    </Center>
-  );
-}
-
-/* --------------------------- */
-/* Wooden props — fence, crate */
-/* --------------------------- */
-function Fence({
-  position,
-  rotationY,
-}: {
-  position: [number, number, number];
-  rotationY: number;
-}) {
-  const wood = "#7a4468";
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      {[-1.1, 1.1].map((x) => (
-        <mesh key={x} castShadow position={[x, 0.5, 0]}>
-          <boxGeometry args={[0.16, 1.0, 0.16]} />
-          <meshStandardMaterial color={wood} roughness={0.85} />
-        </mesh>
-      ))}
-      {[0.42, 0.78].map((y) => (
-        <mesh key={y} castShadow position={[0, y, 0]}>
-          <boxGeometry args={[2.5, 0.13, 0.08]} />
-          <meshStandardMaterial color={wood} roughness={0.85} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function Crate({
-  position,
-  rotationY,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  rotationY: number;
-  scale?: number;
-}) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
-      <mesh castShadow position={[0, 0.42, 0]}>
-        <boxGeometry args={[0.84, 0.84, 0.84]} />
-        <meshStandardMaterial color="#8a4438" roughness={0.8} />
-      </mesh>
-      {[-0.28, 0.28].map((y) => (
-        <mesh key={y} castShadow position={[0, 0.42 + y, 0]}>
-          <boxGeometry args={[0.88, 0.12, 0.88]} />
-          <meshStandardMaterial color="#5c2a22" roughness={0.85} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function Bush({
-  position,
-  scale,
-}: {
-  position: [number, number, number];
-  scale: number;
-}) {
-  return (
-    <mesh castShadow position={position} scale={[scale, scale * 0.72, scale]}>
-      <icosahedronGeometry args={[0.6, 1]} />
-      <meshStandardMaterial
-        color="#c9558a"
-        emissive="#c9558a"
-        emissiveIntensity={0.08}
-        roughness={0.9}
-        flatShading
-      />
-    </mesh>
-  );
-}
-
-const bushPlacements: Array<{ position: [number, number, number]; scale: number }> = [
-  { position: [-8.4, 0.3, 6.3], scale: 1.1 },
-  { position: [9.3, 0.25, 4.8], scale: 0.9 },
-  { position: [-11.7, 0.3, -5.1], scale: 1.2 },
-  { position: [11.1, 0.28, -5.7], scale: 1.0 },
-  { position: [-4.8, 0.24, -12.6], scale: 0.85 },
-  { position: [5.7, 0.3, 13.8], scale: 1.15 },
-  { position: [-16.8, 0.26, 2.7], scale: 0.9 },
-  { position: [17.4, 0.3, 1.8], scale: 1.05 },
-  { position: [-2.2, 0.28, 17.5], scale: 1.1 },
-  { position: [13.5, 0.26, 10.5], scale: 0.9 },
-  { position: [-14.5, 0.3, -12], scale: 1.05 },
-  { position: [6.5, 0.24, -14.5], scale: 0.9 },
-];
-
-/* ---------------------------------------------- */
-/* Player avatar — the Developer model, idling     */
-/* ---------------------------------------------- */
-function renameClips(clips: import("three").AnimationClip[], label: string) {
-  return clips.map((clip, index) => {
-    const next = clip.clone();
-    next.name = clips.length === 1 ? label : `${label}_${index}`;
-    return next;
-  });
-}
-
-function PlayerAvatar() {
-  const modelRef = useRef<Group>(null);
-  const { scene: glbScene } = useGLTF(KNOWME_AVATAR_PATH);
-  const idleFbx = useFBX(careerModelAnimations.idle);
-
-  const model = useMemo(() => {
-    let cloned: Object3D;
-    try {
-      cloned = cloneSkinned(glbScene) as Object3D;
-    } catch {
-      cloned = glbScene.clone(true);
-    }
+  const { wrapper, sampler } = useMemo(() => {
+    const cloned = scene.clone(true);
     prepareShadows(cloned);
-    return cloned;
-  }, [glbScene]);
 
-  const clips = useMemo(
-    () =>
-      buildSafeClips(model, [
-        { label: "idle", animations: renameClips(idleFbx.animations, "idle") },
-      ]),
-    [model, idleFbx],
-  );
+    const wrapper = new Group();
+    wrapper.add(cloned);
+    wrapper.scale.setScalar(MAP_SCALE);
+    wrapper.updateMatrixWorld(true);
 
-  const { actions, mixer } = useAnimations(clips, modelRef);
+    // center the footprint on the origin
+    const box = new Box3().setFromObject(wrapper);
+    const center = new Vector3();
+    box.getCenter(center);
+    wrapper.position.x -= center.x;
+    wrapper.position.z -= center.z;
+    wrapper.updateMatrixWorld(true);
+
+    // drop the terrain so the ground at the spawn point sits at y = 0
+    const preSampler = createGroundSampler(wrapper);
+    const spawnGround = preSampler(0, 0, box.min.y);
+    wrapper.position.y -= spawnGround;
+    wrapper.updateMatrixWorld(true);
+
+    return { wrapper, sampler: createGroundSampler(wrapper) };
+  }, [scene]);
+
+  const onReadyRef = useRef(onReady);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
 
   useEffect(() => {
-    const idle = actions.idle ?? Object.values(actions)[0];
-    idle?.reset().setLoop(LoopRepeat, Infinity).fadeIn(0.2).play();
-    return () => {
-      mixer.stopAllAction();
-    };
-  }, [actions, mixer]);
+    onReadyRef.current(sampler);
+  }, [sampler]);
 
-  return <primitive ref={modelRef} object={model} />;
+  return <primitive object={wrapper} />;
 }
 
 /* --------------------------------------------------------------- */
-/* Procedural rocks — deterministic per seed, always upright        */
-/* (the stones.glb meshes had baked orientations that lay flat,     */
-/*  so the monuments are built from primitives instead)             */
+/* Procedural landmark rocks — deterministic per seed, always up    */
 /* --------------------------------------------------------------- */
 function seededRand(seed: number, index: number) {
   const value = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453;
@@ -580,7 +300,6 @@ function StandingRock({ seed }: { seed: number }) {
 
   return (
     <group>
-      {/* main upright monolith */}
       <mesh
         castShadow
         receiveShadow
@@ -591,7 +310,6 @@ function StandingRock({ seed }: { seed: number }) {
         <dodecahedronGeometry args={[1, 0]} />
         <meshStandardMaterial color={color} roughness={0.9} flatShading />
       </mesh>
-      {/* small rocks around the base */}
       {baseRocks.map((rock, i) => (
         <mesh
           key={i}
@@ -609,46 +327,17 @@ function StandingRock({ seed }: { seed: number }) {
   );
 }
 
-function SmallRock({
-  seed,
-  scale,
-}: {
-  seed: number;
-  scale: number;
-}) {
-  const color = useMemo(() => {
-    const base = new Color("#7d7290");
-    base.offsetHSL(
-      (seededRand(seed, 1) - 0.5) * 0.05,
-      0,
-      (seededRand(seed, 2) - 0.5) * 0.07,
-    );
-    return base;
-  }, [seed]);
-
-  return (
-    <mesh
-      castShadow
-      receiveShadow
-      position={[0, 0.28 * scale, 0]}
-      scale={[scale, scale * 0.55, scale * 0.8]}
-    >
-      <icosahedronGeometry args={[0.6, 0]} />
-      <meshStandardMaterial color={color} roughness={0.92} flatShading />
-    </mesh>
-  );
-}
-
 /* ------------------------------------------------- */
 /* Landmark — glowing ring + standing rock + label    */
 /* ------------------------------------------------- */
-
 function LandmarkStone({
   landmark,
   active,
+  groundY,
 }: {
   landmark: KnowMeLandmark;
   active: boolean;
+  groundY: number;
 }) {
   const ringMat = useRef<MeshStandardMaterial>(null);
   const fillMat = useRef<MeshStandardMaterial>(null);
@@ -668,9 +357,8 @@ function LandmarkStone({
   });
 
   return (
-    <group position={landmark.position}>
-      {/* glow ring on the ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+    <group position={[landmark.position[0], groundY, landmark.position[2]]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]}>
         <ringGeometry args={[1.75, 1.95, 56]} />
         <meshStandardMaterial
           ref={ringMat}
@@ -682,7 +370,7 @@ function LandmarkStone({
           opacity={0.95}
         />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
         <circleGeometry args={[1.75, 56]} />
         <meshStandardMaterial
           ref={fillMat}
@@ -698,7 +386,6 @@ function LandmarkStone({
         <StandingRock seed={landmark.seed} />
       </group>
 
-      {/* warm light so the stone reads at night */}
       <pointLight
         color={EMBER}
         intensity={active ? 26 : 12}
@@ -707,8 +394,7 @@ function LandmarkStone({
         position={[0, 1.6, 0]}
       />
 
-      {/* hand-drawn floating label */}
-      <Billboard position={[0, 2.75, 0]}>
+      <Billboard position={[0, 3.1, 0]}>
         <Text
           font={KNOWME_HAND_FONT}
           fontSize={0.72}
@@ -737,68 +423,45 @@ function LandmarkStone({
   );
 }
 
-/* ------------------------- */
-/* Decorative low-poly trees */
-/* ------------------------- */
-function Tree({
-  x,
-  z,
-  scale,
-  hueShift,
-}: {
-  x: number;
-  z: number;
-  scale: number;
-  hueShift: number;
-}) {
-  const foliage = useMemo(() => {
-    const base = new Color("#d9598a");
-    return base.offsetHSL(hueShift * 0.05, 0.02, hueShift * 0.05);
-  }, [hueShift]);
-
+/* ---------------------------------------------- */
+/* Big extruded name — SIDDHANT BHAGAT             */
+/* ---------------------------------------------- */
+function NameMonument({ groundY }: { groundY: number }) {
   return (
-    <group position={[x, 0, z]} scale={scale}>
-      <mesh castShadow position={[0, 0.9, 0]}>
-        <cylinderGeometry args={[0.16, 0.24, 1.8, 6]} />
-        <meshStandardMaterial color="#41152a" roughness={0.9} />
-      </mesh>
-      <mesh castShadow position={[0, 2.2, 0]}>
-        <icosahedronGeometry args={[1.15, 1]} />
-        <meshStandardMaterial
-          color={foliage}
-          emissive={foliage}
-          emissiveIntensity={0.12}
-          roughness={0.85}
-          flatShading
-        />
-      </mesh>
-      <mesh castShadow position={[0.7, 1.7, 0.25]}>
-        <icosahedronGeometry args={[0.7, 1]} />
-        <meshStandardMaterial
-          color={foliage}
-          emissive={foliage}
-          emissiveIntensity={0.1}
-          roughness={0.85}
-          flatShading
-        />
-      </mesh>
-      <mesh castShadow position={[-0.6, 1.85, -0.3]}>
-        <icosahedronGeometry args={[0.62, 1]} />
-        <meshStandardMaterial
-          color={foliage}
-          emissive={foliage}
-          emissiveIntensity={0.1}
-          roughness={0.85}
-          flatShading
-        />
-      </mesh>
+    <group position={[0, groundY, -9.5]}>
+      <Center disableY>
+        <Text3D
+          font={KNOWME_TITLE_FONT}
+          size={1.6}
+          height={0.6}
+          bevelEnabled
+          bevelThickness={0.045}
+          bevelSize={0.035}
+          bevelSegments={3}
+          curveSegments={8}
+          castShadow
+        >
+          {profile.name}
+          <meshStandardMaterial color="#8b7cf8" roughness={0.55} metalness={0.1} />
+        </Text3D>
+      </Center>
     </group>
   );
 }
 
-function Lamp({ x, z, rotY }: { x: number; z: number; rotY: number }) {
+function Lamp({
+  x,
+  z,
+  rotY,
+  groundY,
+}: {
+  x: number;
+  z: number;
+  rotY: number;
+  groundY: number;
+}) {
   return (
-    <group position={[x, 0, z]} rotation={[0, rotY, 0]}>
+    <group position={[x, groundY, z]} rotation={[0, rotY, 0]}>
       <mesh castShadow position={[0, 1.1, 0]}>
         <boxGeometry args={[0.16, 2.2, 0.16]} />
         <meshStandardMaterial color="#3a1235" roughness={0.8} />
@@ -822,31 +485,14 @@ function Lamp({ x, z, rotY }: { x: number; z: number; rotY: number }) {
   );
 }
 
-function DecorStone({
-  position,
-  scale,
-  rotationY,
-  seed,
-}: {
-  position: [number, number, number];
-  scale: number;
-  rotationY: number;
-  seed: number;
-}) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <SmallRock seed={seed} scale={scale} />
-    </group>
-  );
-}
-
 /* ---------------------------------------------------- */
 /* Spawn circle — glowing ring + hand-written hint text  */
 /* ---------------------------------------------------- */
-function SpawnArea() {
+function SpawnArea({ sampler }: { sampler: GroundSampler }) {
+  const hintY = sampler(0, 5.4) + 0.08;
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
         <ringGeometry args={[3.1, 3.24, 72]} />
         <meshStandardMaterial
           color={GLOW_WHITE}
@@ -858,7 +504,7 @@ function SpawnArea() {
       </mesh>
       <Text
         font={KNOWME_HAND_FONT}
-        position={[0, 0.04, 5.4]}
+        position={[0, hintY, 5.4]}
         rotation={[-Math.PI / 2, 0, 0]}
         fontSize={0.78}
         color="#ffffff"
@@ -872,6 +518,104 @@ function SpawnArea() {
       </Text>
     </group>
   );
+}
+
+/* ---------------------------------------------- */
+/* Player avatar — idle / walk / run animations    */
+/* ---------------------------------------------- */
+function renameClips(clips: import("three").AnimationClip[], label: string) {
+  return clips.map((clip, index) => {
+    const next = clip.clone();
+    next.name = clips.length === 1 ? label : `${label}_${index}`;
+    return next;
+  });
+}
+
+/** Remove hip translation so Mixamo walk/run cycles play in place. */
+function stripRootMotion(clips: import("three").AnimationClip[]) {
+  for (const clip of clips) {
+    clip.tracks = clip.tracks.filter(
+      (track) =>
+        !(
+          track.name.toLowerCase().includes("hips") &&
+          track.name.endsWith(".position")
+        ),
+    );
+  }
+  return clips;
+}
+
+function PlayerAvatar({ speedRef }: { speedRef: RefObject<number> }) {
+  const modelRef = useRef<Group>(null);
+  const { scene: glbScene } = useGLTF(KNOWME_AVATAR_PATH);
+  const idleFbx = useFBX(careerModelAnimations.idle);
+  const walkFbx = useFBX(KNOWME_WALK_FBX);
+  const runFbx = useFBX(KNOWME_RUN_FBX);
+
+  const model = useMemo(() => {
+    let cloned: Object3D;
+    try {
+      cloned = cloneSkinned(glbScene) as Object3D;
+    } catch {
+      cloned = glbScene.clone(true);
+    }
+    prepareShadows(cloned);
+    // skinned bounds go stale while animating — never cull the avatar
+    cloned.traverse((child) => {
+      child.frustumCulled = false;
+    });
+    return cloned;
+  }, [glbScene]);
+
+  const clips = useMemo(
+    () =>
+      buildSafeClips(model, [
+        { label: "idle", animations: renameClips(idleFbx.animations, "idle") },
+        {
+          label: "walk",
+          animations: stripRootMotion(renameClips(walkFbx.animations, "walk")),
+        },
+        {
+          label: "run",
+          animations: stripRootMotion(renameClips(runFbx.animations, "run")),
+        },
+      ]),
+    [model, idleFbx, walkFbx, runFbx],
+  );
+
+  const { actions, mixer } = useAnimations(clips, modelRef);
+  const currentRef = useRef("idle");
+
+  useEffect(() => {
+    const idle = actions.idle ?? Object.values(actions)[0];
+    idle?.reset().setLoop(LoopRepeat, Infinity).fadeIn(0.2).play();
+    currentRef.current = "idle";
+    return () => {
+      mixer.stopAllAction();
+    };
+  }, [actions, mixer]);
+
+  useFrame(() => {
+    const speed = speedRef.current ?? 0;
+    const target = speed > 5.8 ? "run" : speed > 0.5 ? "walk" : "idle";
+    if (target !== currentRef.current) {
+      const prev = actions[currentRef.current];
+      const next = actions[target];
+      if (next) {
+        next.reset().setLoop(LoopRepeat, Infinity).fadeIn(0.22).play();
+        prev?.fadeOut(0.22);
+        currentRef.current = target;
+      }
+    }
+    if (currentRef.current !== "idle") {
+      const action = actions[currentRef.current];
+      if (action) {
+        action.timeScale = Math.max(0.85, Math.min(1.7, speed / 3.6));
+      }
+    }
+  });
+
+  return <primitive ref={modelRef} object={model} />;
 }
 
 /* --------------------------------------- */
@@ -899,7 +643,6 @@ function FollowCamera({ target }: { target: RefObject<Group | null> }) {
     const player = target.current;
     if (!player) return;
     if (!current.current) {
-      // glide in from wherever the loader camera left off
       current.current = camera.position.clone();
     }
     const desired = new Vector3(
@@ -915,12 +658,13 @@ function FollowCamera({ target }: { target: RefObject<Group | null> }) {
   return null;
 }
 
-/* ------------------------------------------------ */
-/* Keyboard controller — walk, face, collide, detect */
-/* ------------------------------------------------ */
+/* ---------------------------------------------------------- */
+/* Keyboard controller — walk, face, terrain-follow, collide    */
+/* ---------------------------------------------------------- */
 interface PlayerControllerProps {
   playerRef: RefObject<Group | null>;
-  innerRef: RefObject<Group | null>;
+  speedRef: RefObject<number>;
+  sampler: GroundSampler;
   paused: boolean;
   onNearestChange: (landmark: KnowMeLandmark | null) => void;
   onActivate: (landmark: KnowMeLandmark) => void;
@@ -928,7 +672,8 @@ interface PlayerControllerProps {
 
 function PlayerController({
   playerRef,
-  innerRef,
+  speedRef,
+  sampler,
   paused,
   onNearestChange,
   onActivate,
@@ -936,7 +681,6 @@ function PlayerController({
   const keys = useRef({ up: false, down: false, left: false, right: false });
   const velocity = useRef(new Vector3());
   const heading = useRef(Math.PI);
-  const walkClock = useRef(0);
   const nearestRef = useRef<KnowMeLandmark | null>(null);
   const onNearestChangeRef = useRef(onNearestChange);
   const onActivateRef = useRef(onActivate);
@@ -996,6 +740,9 @@ function PlayerController({
     const player = playerRef.current;
     if (!player || pausedRef.current) return;
 
+    const prevX = player.position.x;
+    const prevZ = player.position.z;
+
     const accel = 34;
     const maxSpeed = 8.5;
     const damp = Math.pow(0.84, delta * 60);
@@ -1025,7 +772,7 @@ function PlayerController({
       velocity.current.multiplyScalar(0.4);
     }
 
-    // soft collision with landmark stones
+    // soft collision with landmark rocks
     for (const landmark of knowMeLandmarks) {
       const dx = player.position.x - landmark.position[0];
       const dz = player.position.z - landmark.position[2];
@@ -1039,7 +786,22 @@ function PlayerController({
       }
     }
 
+    // terrain follow — walls (steep rises) block, slopes are walked
+    const groundY = sampler(
+      player.position.x,
+      player.position.z,
+      player.position.y,
+    );
+    if (groundY - player.position.y > 2.2) {
+      player.position.x = prevX;
+      player.position.z = prevZ;
+      velocity.current.multiplyScalar(-0.15);
+    } else {
+      player.position.y += (groundY - player.position.y) * Math.min(1, delta * 10);
+    }
+
     const speed = velocity.current.length();
+    speedRef.current = speed;
 
     // face the walk direction
     if (speed > 0.25) {
@@ -1049,19 +811,6 @@ function PlayerController({
       while (diff < -Math.PI) diff += Math.PI * 2;
       heading.current += diff * Math.min(1, delta * 10);
       player.rotation.y = heading.current;
-    }
-
-    // playful walk bob + lean on the inner group
-    const inner = innerRef.current;
-    if (inner) {
-      if (speed > 0.4) {
-        walkClock.current += delta * (6 + speed * 1.4);
-        inner.position.y = Math.abs(Math.sin(walkClock.current)) * 0.09;
-        inner.rotation.x = Math.min(0.16, speed * 0.03);
-      } else {
-        inner.position.y += (0 - inner.position.y) * Math.min(1, delta * 8);
-        inner.rotation.x += (0 - inner.rotation.x) * Math.min(1, delta * 8);
-      }
     }
 
     // nearest landmark within reach
@@ -1103,67 +852,64 @@ function WorldContents({
   nearestId: string | null;
 }) {
   const playerRef = useRef<Group>(null);
-  const innerRef = useRef<Group>(null);
+  const speedRef = useRef(0);
+  const [sampler, setSampler] = useState<GroundSampler | null>(null);
+
+  // terrain heights are raycasts against the village mesh — compute once
+  const groundYs = useMemo(() => {
+    if (!sampler) return null;
+    return {
+      name: sampler(0, -9.5),
+      landmarks: knowMeLandmarks.map((l) =>
+        sampler(l.position[0], l.position[2]),
+      ),
+      lamps: knowMeLamps.map(([x, z]) => sampler(x, z)),
+    };
+  }, [sampler]);
 
   return (
     <group visible={visible}>
-      <GrassIsland />
-      <GrassTufts />
-      <SpawnArea />
-      <NameMonument />
+      <MapModel onReady={(s) => setSampler(() => s)} />
 
-      {/* fences frame the name monument clearing */}
-      <Fence position={[-9.4, 0, -6.6]} rotationY={0.35} />
-      <Fence position={[9.4, 0, -6.6]} rotationY={-0.35} />
+      {sampler && groundYs && (
+        <>
+          <SpawnArea sampler={sampler} />
+          <NameMonument groundY={groundYs.name} />
 
-      <Crate position={[13.5, 0, 10.2]} rotationY={0.3} />
-      <Crate position={[14.3, 0, 9.5]} rotationY={-0.4} scale={0.85} />
-      <Crate position={[13.8, 0.84, 9.9]} rotationY={0.9} scale={0.75} />
+          {knowMeLandmarks.map((landmark, index) => (
+            <LandmarkStone
+              key={landmark.id}
+              landmark={landmark}
+              active={landmark.id === nearestId}
+              groundY={groundYs.landmarks[index]}
+            />
+          ))}
 
-      {bushPlacements.map((bush, index) => (
-        <Bush key={index} position={bush.position} scale={bush.scale} />
-      ))}
+          {knowMeLamps.map(([x, z, rotY], index) => (
+            <Lamp
+              key={index}
+              x={x}
+              z={z}
+              rotY={rotY}
+              groundY={groundYs.lamps[index]}
+            />
+          ))}
 
-      {knowMeLandmarks.map((landmark) => (
-        <LandmarkStone
-          key={landmark.id}
-          landmark={landmark}
-          active={landmark.id === nearestId}
-        />
-      ))}
+          <group ref={playerRef} rotation={[0, Math.PI, 0]}>
+            <PlayerAvatar speedRef={speedRef} />
+          </group>
 
-      {knowMeDecorStones.map((prop, index) => (
-        <DecorStone
-          key={index}
-          position={prop.position}
-          scale={prop.scale}
-          rotationY={prop.rotationY}
-          seed={prop.seed}
-        />
-      ))}
-
-      {knowMeTrees.map(([x, z, scale, hue], index) => (
-        <Tree key={index} x={x} z={z} scale={scale} hueShift={hue} />
-      ))}
-
-      {knowMeLamps.map(([x, z, rotY], index) => (
-        <Lamp key={index} x={x} z={z} rotY={rotY} />
-      ))}
-
-      <group ref={playerRef} rotation={[0, Math.PI, 0]}>
-        <group ref={innerRef}>
-          <PlayerAvatar />
-        </group>
-      </group>
-
-      <PlayerController
-        playerRef={playerRef}
-        innerRef={innerRef}
-        paused={paused || !visible}
-        onNearestChange={onNearestChange}
-        onActivate={onActivate}
-      />
-      {visible && <FollowCamera target={playerRef} />}
+          <PlayerController
+            playerRef={playerRef}
+            speedRef={speedRef}
+            sampler={sampler}
+            paused={paused || !visible}
+            onNearestChange={onNearestChange}
+            onActivate={onActivate}
+          />
+          {visible && <FollowCamera target={playerRef} />}
+        </>
+      )}
     </group>
   );
 }
@@ -1188,27 +934,28 @@ export function KnowMeWorldScene({
       className="knowme-world-canvas"
       shadows
       dpr={[1, 1.5]}
-      camera={{ position: [10.5, 8.2, 10.5], fov: 42, near: 0.1, far: 120 }}
+      camera={{ position: [10.5, 8.2, 10.5], fov: 42, near: 0.1, far: 200 }}
       gl={{ antialias: true, alpha: false }}
     >
       <color attach="background" args={[NIGHT_BG]} />
-      <fog attach="fog" args={[NIGHT_BG, 32, 85]} />
+      <fog attach="fog" args={[NIGHT_BG, 34, 110]} />
 
-      <ambientLight color="#d9c4ff" intensity={0.32} />
-      <hemisphereLight args={["#c77aff", "#12041f", 0.4]} />
+      <ambientLight color="#d9c4ff" intensity={0.35} />
+      <hemisphereLight args={["#c77aff", "#12041f", 0.42]} />
       <directionalLight
         castShadow
         color="#ffa8d4"
-        position={[12, 18, 8]}
+        position={[24, 36, 16]}
         intensity={1.15}
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-42}
-        shadow-camera-right={42}
-        shadow-camera-top={42}
-        shadow-camera-bottom={-42}
+        shadow-camera-left={-60}
+        shadow-camera-right={60}
+        shadow-camera-top={60}
+        shadow-camera-bottom={-60}
+        shadow-camera-far={140}
       />
 
-      <Stars radius={60} depth={24} count={1400} factor={3.2} fade speed={0.5} />
+      <Stars radius={90} depth={30} count={1600} factor={4} fade speed={0.5} />
 
       <GridFloor />
       {!started && <LoadingStage />}
@@ -1229,4 +976,7 @@ export function KnowMeWorldScene({
 }
 
 useGLTF.preload(KNOWME_AVATAR_PATH);
+useGLTF.preload(KNOWME_MAP_PATH);
 useFBX.preload(careerModelAnimations.idle);
+useFBX.preload(KNOWME_WALK_FBX);
+useFBX.preload(KNOWME_RUN_FBX);

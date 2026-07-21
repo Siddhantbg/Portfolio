@@ -1,0 +1,11 @@
+Model Information:
+* title:	Kakariko Village (Ocarina of Time)
+* source:	https://sketchfab.com/3d-models/kakariko-village-ocarina-of-time-510b2f18fefe47f79f8fed2cb4b1b627
+* author:	XanderPriest281 (https://sketchfab.com/XP281)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Kakariko Village (Ocarina of Time)" (https://sketchfab.com/3d-models/kakariko-village-ocarina-of-time-510b2f18fefe47f79f8fed2cb4b1b627) by XanderPriest281 (https://sketchfab.com/XP281) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

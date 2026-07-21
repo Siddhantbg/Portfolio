@@ -149,8 +149,15 @@ export const knowMeLamps: Array<[number, number, number]> = [
 ];
 
 export const KNOWME_AVATAR_PATH = "/models/animations/Developer.glb";
+export const KNOWME_MAP_PATH = "/models/knowme/map.glb";
+export const KNOWME_WALK_FBX = "/models/animations/walking.fbx";
+export const KNOWME_RUN_FBX = "/models/animations/running.fbx";
 export const KNOWME_HAND_FONT = "/fonts/AmaticSC-Bold.ttf";
 export const KNOWME_TITLE_FONT = "/fonts/helvetiker_bold.typeface.json";
+
+/** CC-BY-4.0 attribution required by the map model's license */
+export const KNOWME_MAP_CREDIT =
+  'Map: "Kakariko Village (Ocarina of Time)" by XanderPriest281 · CC-BY-4.0';
 
 export const MAP_RADIUS = 34;
 export const LANDMARK_ENTER_RADIUS = 3;
