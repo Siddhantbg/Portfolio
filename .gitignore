@@ -1,0 +1,53 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+/Resumes
+
+# env files
+.env*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Unused / heavy assets (not referenced anywhere in code) ──
+# Raw 3D source packs — only the needed GLBs were copied into public/models/knowme
+/src/assets/3D
+# Scrapped 2D RPG asset packs (Kenney desert + blocky characters)
+/src/assets/RPG
+# Duplicate SFX source — the served copy lives in public/sfx
+/src/assets/SFXsounds
+# Unused menu audio (career-mode/kickoff/ultimate-team) — playback uses /songs
+/public/audio
+# Duplicate landing image — used copy is imported from src/assets/Landing_background.png
+/public/images
+
+# Generated from src/assets/songs by scripts/sync-songs.mjs (rebuilt on dev/build)
+/public/songs
