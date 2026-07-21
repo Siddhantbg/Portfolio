@@ -14,40 +14,6 @@ const KnowMeWorldScene = dynamic(
   { ssr: false },
 );
 
-/* ------------------------------------------------------------------ */
-/* Loading screen — modern football matchday loader                    */
-/* Center-circle + midline motif, big percentage, glowing progress bar */
-/* ------------------------------------------------------------------ */
-function KnowMeLoader({ progress }: { progress: number }) {
-  const pct = Math.min(100, Math.round(progress));
-  return (
-    <div className="knowme-loader" role="status" aria-label="Loading 3D world">
-      <div className="knowme-loader-inner">
-        <p className="knowme-loader-kicker">MATCHDAY · LOADING WORLD</p>
-        <h3 className="knowme-loader-title">KNOW ME</h3>
-
-        <div className="knowme-loader-pitch" aria-hidden>
-          <div className="knowme-loader-line">
-            <div
-              className="knowme-loader-fill"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <div className="knowme-loader-circle">
-            <span className="knowme-loader-ball">⚽</span>
-          </div>
-        </div>
-
-        <p className="knowme-loader-pct">
-          {pct}
-          <span>%</span>
-        </p>
-        <p className="knowme-loader-hint">warming up the night world…</p>
-      </div>
-    </div>
-  );
-}
-
 /* ----------------------------------------------------------- */
 /* Click-to-start — hand-drawn text over the idle world         */
 /* ----------------------------------------------------------- */
@@ -88,7 +54,7 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
   const [graceOver, setGraceOver] = useState(false);
   const [nearest, setNearest] = useState<KnowMeLandmark | null>(null);
   const [active, setActive] = useState<KnowMeLandmark | null>(null);
-  const { progress, active: loading } = useProgress();
+  const { active: loading } = useProgress();
 
   // Assets may be cached from a previous visit and never report progress,
   // so also consider the world ready once nothing is loading after a beat.
@@ -179,13 +145,12 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
 
           <div className="knowme-world-stage">
             <KnowMeWorldScene
+              started={started}
               paused={!started || active !== null}
               nearestId={nearest?.id ?? null}
               onNearestChange={setNearest}
               onActivate={activateLandmark}
             />
-
-            {!ready && <KnowMeLoader progress={progress} />}
 
             {ready && !started && (
               <ClickToStart
