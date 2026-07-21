@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Barlow_Condensed, Press_Start_2P } from "next/font/google";
+import { Amatic_SC, Barlow_Condensed, Press_Start_2P } from "next/font/google";
 import "./globals.css";
 
 const barlow = Barlow_Condensed({
@@ -12,6 +12,12 @@ const pressStart = Press_Start_2P({
   subsets: ["latin"],
   weight: ["400"],
   variable: "--font-pixel",
+});
+
+const amatic = Amatic_SC({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-hand",
 });
 
 export const metadata: Metadata = {
@@ -33,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${barlow.variable} ${pressStart.variable} antialiased overflow-hidden`}
+        className={`${barlow.variable} ${pressStart.variable} ${amatic.variable} antialiased overflow-hidden`}
       >
         {children}
       </body>

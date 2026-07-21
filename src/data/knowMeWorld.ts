@@ -1,94 +1,140 @@
 import { profile, projects } from "@/data/portfolio";
 
-export interface KnowMeEgg {
+export interface KnowMeLandmark {
   id: string;
   label: string;
   subtitle: string;
   href: string;
   position: [number, number, number];
+  /** Mesh name inside stones.glb used as the landmark rock */
+  stoneMesh: string;
+  stoneScale: number;
+  stoneRotationY: number;
 }
 
-/** Resume easter eggs painted on the navy ground — Enter while nearby to open. */
-export const knowMeEggs: KnowMeEgg[] = [
+/**
+ * Resume landmarks — glowing stones scattered around the night world.
+ * Walk near one and press Enter to open it.
+ */
+export const knowMeLandmarks: KnowMeLandmark[] = [
   {
     id: "shl",
-    label: "SHL RECOMMENDER",
+    label: "SHL Recommender",
     subtitle: "RAG · FAISS · Gemini · 65% Recall@5",
     href:
       projects.find((p) => p.id === "shl-recommender")?.links.github ??
       profile.github,
-    position: [-6.5, 0.02, -3.5],
+    position: [-9, 0, -6],
+    stoneMesh: "Stone_1_Low",
+    stoneScale: 0.045,
+    stoneRotationY: 0.4,
   },
   {
     id: "code-review",
-    label: "AI CODE REVIEW",
+    label: "AI Code Review",
     subtitle: "Local DeepSeek · FastAPI · Docker",
     href:
       projects.find((p) => p.id === "ai-code-review")?.links.github ??
       profile.github,
-    position: [6.2, 0.02, -4.2],
+    position: [9.5, 0, -5.5],
+    stoneMesh: "Stone_2_Low",
+    stoneScale: 0.05,
+    stoneRotationY: 1.2,
   },
   {
     id: "medical",
-    label: "MEDICAL AI",
+    label: "Medical AI",
     subtitle: "Thermal imaging · CNN segmentation",
     href:
       projects.find((p) => p.id === "medical-ai")?.links.github ??
       profile.github,
-    position: [-5.8, 0.02, 5.5],
+    position: [-10, 0, 6.5],
+    stoneMesh: "Stone_3_Low",
+    stoneScale: 0.042,
+    stoneRotationY: 2.1,
   },
   {
     id: "quant",
-    label: "CNN QUANTIZATION",
+    label: "CNN Quantization",
     subtitle: "4× smaller models · edge ML",
     href:
       projects.find((p) => p.id === "cnn-quantization")?.links.github ??
       profile.github,
-    position: [5.5, 0.02, 5.2],
+    position: [9, 0, 7],
+    stoneMesh: "Stone_4_Low",
+    stoneScale: 0.048,
+    stoneRotationY: 0.8,
   },
   {
     id: "github",
-    label: "GITHUB",
+    label: "GitHub",
     subtitle: "All repos · Siddhantbg",
     href: profile.github,
-    position: [0, 0.02, -7.2],
+    position: [0, 0, -11.5],
+    stoneMesh: "Stone_5_Low",
+    stoneScale: 0.052,
+    stoneRotationY: 1.5,
   },
   {
     id: "linkedin",
-    label: "LINKEDIN",
+    label: "LinkedIn",
     subtitle: "Connect · hire path",
     href: profile.linkedin,
-    position: [0, 0.02, 7.2],
+    position: [0.5, 0, 11.5],
+    stoneMesh: "Stone_1_Low.001",
+    stoneScale: 0.05,
+    stoneRotationY: 2.8,
   },
 ];
 
 export const knowMeWorldMeta = {
-  title: "KNOW ME · FIELD",
-  subtitle: "Roll the ball · find resume marks · press Enter",
-  controls: "WASD / Arrows to roll · Enter to open nearest mark",
+  title: "KNOW ME · NIGHT WORLD",
+  subtitle: "Walk around · find the glowing stones · press Enter",
+  controls: "WASD / Arrows to walk · Enter to open the nearest stone",
 };
 
-export const KNOWME_BALL_PATH = "/models/knowme/soccer-ball.glb";
-export const KNOWME_STONES_PATH = "/models/knowme/stones.glb";
+/** Decorative low-poly trees [x, z, scale, hueShift] */
+export const knowMeTrees: Array<[number, number, number, number]> = [
+  [-14, -12, 1.4, 0],
+  [-11.5, -13.5, 1.1, 0.35],
+  [13, -12.5, 1.5, 0.6],
+  [15, -9, 1.0, 0.2],
+  [-15.5, 3, 1.25, 0.5],
+  [-13.5, 12, 1.45, 0.15],
+  [14.5, 11, 1.2, 0.4],
+  [12, 14, 1.55, 0.7],
+  [3.5, -15, 1.3, 0.25],
+  [-4, 15.5, 1.15, 0.55],
+  [-6.5, -15, 1.05, 0.8],
+  [7, 15, 1.35, 0.1],
+];
 
-/** Decorative stone placements [x, y, z, scale, rotationY, meshName] */
-export const knowMeStoneProps: Array<{
+/** Decorative small rocks [x, z, scale, rotY, meshName] */
+export const knowMeDecorStones: Array<{
   position: [number, number, number];
   scale: number;
   rotationY: number;
   mesh: string;
 }> = [
-  { position: [-9, 0, -1], scale: 0.035, rotationY: 0.4, mesh: "Stone_1_Low" },
-  { position: [9.2, 0, -2], scale: 0.04, rotationY: 1.2, mesh: "Stone_2_Low" },
-  { position: [-8.5, 0, 4], scale: 0.03, rotationY: 2.1, mesh: "Stone_3_Low" },
-  { position: [8.8, 0, 3.5], scale: 0.038, rotationY: 0.8, mesh: "Stone_4_Low" },
-  { position: [-3, 0, -9], scale: 0.028, rotationY: 1.5, mesh: "Stone_5_Low" },
-  { position: [3.5, 0, -8.8], scale: 0.032, rotationY: 0.2, mesh: "Stone_1_Low.001" },
-  { position: [-2.5, 0, 9], scale: 0.03, rotationY: 2.8, mesh: "Stone_2_Low.001" },
-  { position: [4, 0, 8.5], scale: 0.034, rotationY: 1.7, mesh: "Stone_3_Low.001" },
-  { position: [-10, 0, -6], scale: 0.045, rotationY: 0.9, mesh: "Stone_4_Low.002" },
-  { position: [10, 0, 6], scale: 0.042, rotationY: 2.4, mesh: "Stone_5_Low.002" },
+  { position: [-4.5, 0, -3], scale: 0.014, rotationY: 0.9, mesh: "Stone_2_Low.001" },
+  { position: [5, 0, 2.5], scale: 0.016, rotationY: 2.2, mesh: "Stone_3_Low.001" },
+  { position: [-2, 0, 6], scale: 0.012, rotationY: 1.1, mesh: "Stone_4_Low.001" },
+  { position: [3, 0, -7], scale: 0.015, rotationY: 0.3, mesh: "Stone_5_Low.001" },
+  { position: [-7.5, 0, 0.5], scale: 0.013, rotationY: 2.9, mesh: "Stone_1_Low.002" },
+  { position: [7.5, 0, -1.5], scale: 0.014, rotationY: 1.8, mesh: "Stone_2_Low.002" },
 ];
 
-export const MAP_RADIUS = 12;
-export const EGG_ENTER_RADIUS = 1.85;
+/** Lamp posts [x, z, rotY] */
+export const knowMeLamps: Array<[number, number, number]> = [
+  [-3.2, -2.2, 0.8],
+  [4, 4.2, -2.2],
+  [-6, 8.5, 1.6],
+  [6.5, -8.5, 0.4],
+];
+
+export const KNOWME_AVATAR_PATH = "/models/animations/Developer.glb";
+export const KNOWME_STONES_PATH = "/models/knowme/stones.glb";
+export const KNOWME_HAND_FONT = "/fonts/AmaticSC-Bold.ttf";
+
+export const MAP_RADIUS = 17;
+export const LANDMARK_ENTER_RADIUS = 2.6;

@@ -3302,3 +3302,396 @@ body {
   border-color: #9ed0ff;
 }
 
+/* ── KNOW ME · Night World ─────────────────────────────────── */
+
+.knowme-night-panel {
+  background: #12040d;
+  border: 1px solid rgba(255, 138, 61, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(255, 106, 61, 0.12),
+    0 24px 80px rgba(0, 0, 0, 0.7);
+  border-radius: 14px;
+}
+
+.knowme-night-close {
+  background: rgba(255, 244, 236, 0.08);
+  border: 1px solid rgba(255, 138, 61, 0.4);
+  border-radius: 8px;
+  color: #ffd9c4;
+}
+
+.knowme-night-close:hover {
+  background: rgba(255, 138, 61, 0.22);
+}
+
+.knowme-night-frame {
+  display: flex;
+  flex-direction: column;
+  height: min(82vh, 680px);
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #1d0716;
+}
+
+.knowme-night-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 3.2rem 0.65rem 1rem;
+  background: linear-gradient(180deg, #2a0b1d 0%, #1d0716 100%);
+  border-bottom: 1px solid rgba(255, 138, 61, 0.25);
+}
+
+.knowme-night-kicker {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #ff8a3d;
+}
+
+.knowme-night-title {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-barlow), sans-serif;
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff4ec;
+}
+
+.knowme-night-chip {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffd9c4;
+  background: rgba(255, 106, 61, 0.12);
+  border: 1px solid rgba(255, 138, 61, 0.35);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.knowme-night-chip strong {
+  color: #fff;
+  margin-left: 0.25rem;
+}
+
+/* Loading screen — football matchday loader */
+.knowme-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at 50% 120%, rgba(255, 106, 61, 0.18) 0%, transparent 55%),
+    linear-gradient(180deg, #12040d 0%, #1d0716 60%, #240a1a 100%);
+}
+
+.knowme-loader-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(420px, 86%);
+}
+
+.knowme-loader-kicker {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: #ff8a3d;
+}
+
+.knowme-loader-title {
+  margin: 0.3rem 0 1.6rem;
+  font-family: var(--font-barlow), sans-serif;
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #fff4ec;
+  text-shadow: 0 0 24px rgba(255, 106, 61, 0.45);
+}
+
+/* pitch midline + center circle */
+.knowme-loader-pitch {
+  position: relative;
+  width: 100%;
+  height: 84px;
+  display: grid;
+  place-items: center;
+}
+
+.knowme-loader-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 3px;
+  transform: translateY(-50%);
+  background: rgba(255, 244, 236, 0.14);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.knowme-loader-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff6a3d, #ffb26b);
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(255, 138, 61, 0.9);
+  transition: width 0.25s ease;
+}
+
+.knowme-loader-circle {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border: 3px solid rgba(255, 244, 236, 0.3);
+  border-radius: 50%;
+  background: #1d0716;
+  display: grid;
+  place-items: center;
+}
+
+.knowme-loader-ball {
+  font-size: 1.6rem;
+  line-height: 1;
+  animation: knowme-ball-spin 1.6s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(255, 138, 61, 0.6));
+}
+
+@keyframes knowme-ball-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.knowme-loader-pct {
+  margin: 1.1rem 0 0;
+  font-family: var(--font-barlow), sans-serif;
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff4ec;
+  font-variant-numeric: tabular-nums;
+}
+
+.knowme-loader-pct span {
+  font-size: 1.4rem;
+  color: #ff8a3d;
+  margin-left: 0.15rem;
+}
+
+.knowme-loader-hint {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-hand), cursive;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  color: #c98da0;
+}
+
+/* Click-to-start overlay — hand-drawn note over the idle world */
+.knowme-start-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: clamp(1rem, 8vw, 6rem);
+  background: radial-gradient(
+    ellipse at 42% 55%,
+    transparent 30%,
+    rgba(18, 4, 13, 0.55) 100%
+  );
+  border: 0;
+  cursor: pointer;
+  animation: knowme-fade-in 0.5s ease-out;
+}
+
+.knowme-start-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  color: #ffffff;
+}
+
+.knowme-start-arrow {
+  width: 74px;
+  height: 58px;
+  color: #fff;
+  transform: rotate(-6deg);
+  animation: knowme-arrow-nudge 1.6s ease-in-out infinite;
+}
+
+.knowme-start-text {
+  font-family: var(--font-hand), cursive;
+  font-weight: 700;
+  font-size: clamp(2.1rem, 4.5vw, 3rem);
+  line-height: 0.95;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.65);
+}
+
+.knowme-start-sound {
+  font-family: var(--font-hand), cursive;
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
+  color: #ffd9c4;
+  opacity: 0.9;
+}
+
+@keyframes knowme-arrow-nudge {
+  0%,
+  100% {
+    transform: rotate(-6deg) translateX(0);
+  }
+  50% {
+    transform: rotate(-6deg) translateX(-7px);
+  }
+}
+
+@keyframes knowme-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Near-landmark prompt */
+.knowme-night-prompt {
+  position: absolute;
+  bottom: 1.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.95rem;
+  font-family: var(--font-hand), cursive;
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: rgba(18, 4, 13, 0.72);
+  border: 1px solid rgba(255, 138, 61, 0.45);
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  animation: knowme-fade-in 0.25s ease-out;
+}
+
+.knowme-night-prompt-key {
+  display: grid;
+  place-items: center;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 0.3rem;
+  font-family: var(--font-barlow), sans-serif;
+  font-size: 0.95rem;
+  color: #12040d;
+  background: #ffb26b;
+  border-radius: 6px;
+  box-shadow: 0 2px 0 rgba(255, 106, 61, 0.7);
+}
+
+/* Opened landmark card */
+.knowme-night-panel-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  background: rgba(18, 4, 13, 0.6);
+  backdrop-filter: blur(3px);
+  animation: knowme-fade-in 0.2s ease-out;
+}
+
+.knowme-night-card {
+  width: min(380px, 88%);
+  padding: 1.1rem 1.2rem 1.25rem;
+  background: linear-gradient(180deg, #2a0b1d 0%, #1d0716 100%);
+  border: 1px solid rgba(255, 138, 61, 0.45);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+
+.knowme-night-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.knowme-night-card-kicker {
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #ff8a3d;
+}
+
+.knowme-night-card-title {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-hand), cursive;
+  font-weight: 700;
+  font-size: 1.9rem;
+  line-height: 1;
+  color: #fff4ec;
+}
+
+.knowme-night-card-close {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #ffd9c4;
+  background: rgba(255, 244, 236, 0.08);
+  border: 1px solid rgba(255, 138, 61, 0.4);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.knowme-night-card-close:hover {
+  background: rgba(255, 138, 61, 0.22);
+}
+
+.knowme-night-card-sub {
+  margin: 0.7rem 0 0.9rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #c98da0;
+}
+
+.knowme-night-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #12040d;
+  background: linear-gradient(180deg, #ffb26b 0%, #ff6a3d 100%);
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 0 18px rgba(255, 106, 61, 0.45);
+}
+
+.knowme-night-card-link:hover {
+  filter: brightness(1.08);
+}
+
