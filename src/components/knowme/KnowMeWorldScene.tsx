@@ -755,9 +755,13 @@ function PlayerController({
   onNearestChange,
   onActivate,
 }: PlayerControllerProps) {
+  const { camera } = useThree();
   const keys = useRef({ up: false, down: false, left: false, right: false });
   const velocity = useRef(new Vector3());
-  const heading = useRef(Math.PI);
+  const heading = useRef(0);
+  const forward = useRef(new Vector3());
+  const right = useRef(new Vector3());
+  const wish = useRef(new Vector3());
   const nearestRef = useRef<KnowMeLandmark | null>(null);
   const onNearestChangeRef = useRef(onNearestChange);
   const onActivateRef = useRef(onActivate);
@@ -771,6 +775,12 @@ function PlayerController({
   }, [onActivate]);
   useEffect(() => {
     pausedRef.current = paused;
+    if (paused) {
+      keys.current.up = false;
+      keys.current.down = false;
+      keys.current.left = false;
+      keys.current.right = false;
+    }
   }, [paused]);
 
   useEffect(() => {
@@ -805,11 +815,20 @@ function PlayerController({
       if (dir) keys.current[dir] = false;
     };
 
+    const clearKeys = () => {
+      keys.current.up = false;
+      keys.current.down = false;
+      keys.current.left = false;
+      keys.current.right = false;
+    };
+
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("blur", clearKeys);
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("blur", clearKeys);
     };
   }, []);
 
@@ -820,17 +839,33 @@ function PlayerController({
     const prevX = player.position.x;
     const prevZ = player.position.z;
 
+    // Camera-relative WASD (screen-space):
+    // W = into the screen / forward, S = back, A = left, D = right
+    camera.getWorldDirection(forward.current);
+    forward.current.y = 0;
+    if (forward.current.lengthSq() < 1e-6) {
+      forward.current.set(0, 0, -1);
+    } else {
+      forward.current.normalize();
+    }
+    right.current.set(forward.current.z, 0, -forward.current.x);
+
+    const fwd =
+      (keys.current.up ? 1 : 0) - (keys.current.down ? 1 : 0);
+    const strafe =
+      (keys.current.right ? 1 : 0) - (keys.current.left ? 1 : 0);
+
+    wish.current
+      .set(0, 0, 0)
+      .addScaledVector(forward.current, fwd)
+      .addScaledVector(right.current, strafe);
+
     const accel = 42;
     const maxSpeed = 11;
     const damp = Math.pow(0.84, delta * 60);
-    const input = new Vector3(
-      (keys.current.right ? 1 : 0) - (keys.current.left ? 1 : 0),
-      0,
-      (keys.current.down ? 1 : 0) - (keys.current.up ? 1 : 0),
-    );
-    if (input.lengthSq() > 0) {
-      input.normalize().multiplyScalar(accel * delta);
-      velocity.current.add(input);
+    if (wish.current.lengthSq() > 0) {
+      wish.current.normalize().multiplyScalar(accel * delta);
+      velocity.current.add(wish.current);
     }
     velocity.current.multiplyScalar(damp);
     if (velocity.current.length() > maxSpeed) {
@@ -866,7 +901,6 @@ function PlayerController({
     // terrain follow — stay on village mesh; walls (steep rises) block
     const groundY = sampler(player.position.x, player.position.z);
     if (groundY === null) {
-      // walked off the map mesh — snap back
       player.position.x = prevX;
       player.position.z = prevZ;
       velocity.current.multiplyScalar(-0.2);
@@ -881,13 +915,13 @@ function PlayerController({
     const speed = velocity.current.length();
     speedRef.current = speed;
 
-    // face the walk direction
+    // Face the direction of travel (camera-relative forward when moving)
     if (speed > 0.25) {
       const target = Math.atan2(velocity.current.x, velocity.current.z);
       let diff = target - heading.current;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      heading.current += diff * Math.min(1, delta * 10);
+      heading.current += diff * Math.min(1, delta * 12);
       player.rotation.y = heading.current;
     }
 
@@ -973,7 +1007,7 @@ function WorldContents({
             />
           ))}
 
-          <group ref={playerRef} rotation={[0, Math.PI, 0]}>
+          <group ref={playerRef}>
             <PlayerAvatar speedRef={speedRef} />
           </group>
 
