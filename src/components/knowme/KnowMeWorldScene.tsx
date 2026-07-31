@@ -60,8 +60,10 @@ const NIGHT_BG = "#170929";
 const EMBER = "#ff6a3d";
 const GLOW_WHITE = "#fff4ec";
 
-/** Target village footprint (world units). Auto-scale from the GLB bbox. */
-const MAP_TARGET_WIDTH = 72;
+/** Target village footprint (world units). Larger = human-scale streets vs avatar. */
+const MAP_TARGET_WIDTH = 320;
+/** Avatar scale — Ready Player Me sits a bit tall next to low-poly houses. */
+const AVATAR_SCALE = 0.62;
 
 function prepareShadows(root: Object3D) {
   root.traverse((child) => {
@@ -225,17 +227,22 @@ function createGroundSampler(root: Object3D): GroundSampler {
   const down = new Vector3(0, -1, 0);
   const origin = new Vector3();
   return (x, z, fallback) => {
-    origin.set(x, 400, z);
+    origin.set(x, 800, z);
     raycaster.set(origin, down);
     const hits = raycaster.intersectObject(root, true);
-    if (hits.length > 0) return hits[0].point.y;
-    return fallback === undefined ? null : fallback;
+    if (hits.length === 0) return fallback === undefined ? null : fallback;
+    // Prefer the LOWEST surface — first hit is often a rooftop.
+    let bestY = hits[0].point.y;
+    for (let i = 1; i < hits.length; i += 1) {
+      if (hits[i].point.y < bestY) bestY = hits[i].point.y;
+    }
+    return bestY;
   };
 }
 
 /** Find the largest cluster of low, flat ground — the village plaza. */
 function findPlazaOffset(sampler: GroundSampler, halfExtent: number) {
-  const step = 1.5;
+  const step = Math.max(3, halfExtent / 28);
   const samples: Array<{ x: number; z: number; y: number }> = [];
   for (let x = -halfExtent; x <= halfExtent; x += step) {
     for (let z = -halfExtent; z <= halfExtent; z += step) {
@@ -247,14 +254,15 @@ function findPlazaOffset(sampler: GroundSampler, halfExtent: number) {
 
   samples.sort((a, b) => a.y - b.y);
   const yCut = samples[Math.floor(samples.length * 0.22)]?.y ?? samples[0].y;
-  const lows = samples.filter((s) => s.y <= yCut + 1.0);
+  const lows = samples.filter((s) => s.y <= yCut + 2.5);
 
   let best = lows[0] ?? samples[0];
   let bestScore = -1;
+  const neighborR = step * 5;
   for (const p of lows) {
     let neighbors = 0;
     for (const o of lows) {
-      if (Math.hypot(o.x - p.x, o.z - p.z) < 8) neighbors += 1;
+      if (Math.hypot(o.x - p.x, o.z - p.z) < neighborR) neighbors += 1;
     }
     if (neighbors > bestScore) {
       bestScore = neighbors;
@@ -410,7 +418,7 @@ function LandmarkStone({
   return (
     <group position={[landmark.position[0], groundY, landmark.position[2]]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]}>
-        <ringGeometry args={[1.75, 1.95, 56]} />
+        <ringGeometry args={[2.1, 2.35, 56]} />
         <meshStandardMaterial
           ref={ringMat}
           color={GLOW_WHITE}
@@ -422,7 +430,7 @@ function LandmarkStone({
         />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <circleGeometry args={[1.75, 56]} />
+        <circleGeometry args={[2.1, 56]} />
         <meshStandardMaterial
           ref={fillMat}
           color={EMBER}
@@ -433,38 +441,38 @@ function LandmarkStone({
         />
       </mesh>
 
-      <group rotation={[0, landmark.rotationY, 0]}>
+      <group rotation={[0, landmark.rotationY, 0]} scale={1.35}>
         <StandingRock seed={landmark.seed} />
       </group>
 
       <pointLight
         color={EMBER}
-        intensity={active ? 26 : 12}
-        distance={7}
+        intensity={active ? 32 : 16}
+        distance={10}
         decay={2}
-        position={[0, 1.6, 0]}
+        position={[0, 2.2, 0]}
       />
 
-      <Billboard position={[0, 3.1, 0]}>
+      <Billboard position={[0, 4.2, 0]}>
         <Text
           font={KNOWME_HAND_FONT}
-          fontSize={0.72}
+          fontSize={1.05}
           color={active ? "#ffffff" : "#ffd9c4"}
           anchorX="center"
           anchorY="bottom"
-          outlineWidth={0.028}
+          outlineWidth={0.035}
           outlineColor={NIGHT_BG}
         >
           {landmark.label.toUpperCase()}
         </Text>
         <Text
           font={KNOWME_HAND_FONT}
-          fontSize={0.36}
+          fontSize={0.48}
           color={active ? "#ffe6d6" : "#e5b9c8"}
           anchorX="center"
           anchorY="top"
-          position={[0, -0.06, 0]}
-          outlineWidth={0.02}
+          position={[0, -0.08, 0]}
+          outlineWidth={0.025}
           outlineColor={NIGHT_BG}
         >
           {landmark.subtitle}
@@ -479,15 +487,15 @@ function LandmarkStone({
 /* ---------------------------------------------- */
 function NameMonument({ groundY }: { groundY: number }) {
   return (
-    <group position={[0, groundY, -5.5]}>
+    <group position={[0, groundY, -16]}>
       <Center disableY>
         <Text3D
           font={KNOWME_TITLE_FONT}
-          size={1.1}
-          height={0.45}
+          size={2.4}
+          height={0.7}
           bevelEnabled
-          bevelThickness={0.035}
-          bevelSize={0.028}
+          bevelThickness={0.05}
+          bevelSize={0.04}
           bevelSegments={3}
           curveSegments={8}
           castShadow
@@ -540,11 +548,11 @@ function Lamp({
 /* Spawn circle — glowing ring + hand-written hint text  */
 /* ---------------------------------------------------- */
 function SpawnArea({ sampler }: { sampler: GroundSampler }) {
-  const hintY = (sampler(0, 3.8) ?? 0) + 0.08;
+  const hintY = (sampler(0, 5) ?? 0) + 0.08;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <ringGeometry args={[2.4, 2.55, 72]} />
+        <ringGeometry args={[1.6, 1.75, 72]} />
         <meshStandardMaterial
           color={GLOW_WHITE}
           emissive={GLOW_WHITE}
@@ -555,9 +563,9 @@ function SpawnArea({ sampler }: { sampler: GroundSampler }) {
       </mesh>
       <Text
         font={KNOWME_HAND_FONT}
-        position={[0, hintY, 3.8]}
+        position={[0, hintY, 5]}
         rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.55}
+        fontSize={0.7}
         color="#ffffff"
         anchorX="center"
         anchorY="middle"
@@ -648,7 +656,7 @@ function PlayerAvatar({ speedRef }: { speedRef: RefObject<number> }) {
 
   useFrame(() => {
     const speed = speedRef.current ?? 0;
-    const target = speed > 5.8 ? "run" : speed > 0.5 ? "walk" : "idle";
+    const target = speed > 7.5 ? "run" : speed > 0.45 ? "walk" : "idle";
     if (target !== currentRef.current) {
       const prev = actions[currentRef.current];
       const next = actions[target];
@@ -661,12 +669,16 @@ function PlayerAvatar({ speedRef }: { speedRef: RefObject<number> }) {
     if (currentRef.current !== "idle") {
       const action = actions[currentRef.current];
       if (action) {
-        action.timeScale = Math.max(0.85, Math.min(1.7, speed / 3.6));
+        action.timeScale = Math.max(0.85, Math.min(1.7, speed / 4.2));
       }
     }
   });
 
-  return <primitive ref={modelRef} object={model} />;
+  return (
+    <group scale={AVATAR_SCALE}>
+      <primitive ref={modelRef} object={model} />
+    </group>
+  );
 }
 
 /* --------------------------------------- */
@@ -689,21 +701,35 @@ function LoaderCamera() {
 function FollowCamera({ target }: { target: RefObject<Group | null> }) {
   const { camera } = useThree();
   const current = useRef<Vector3 | null>(null);
+  const look = useRef(new Vector3());
 
   useFrame(() => {
     const player = target.current;
     if (!player) return;
-    if (!current.current) {
-      current.current = camera.position.clone();
-    }
+
+    // Third-person: sit behind the character based on facing yaw
+    const yaw = player.rotation.y;
+    const back = 5.2;
+    const height = 2.35;
     const desired = new Vector3(
-      player.position.x,
-      player.position.y + 9,
-      player.position.z + 12,
+      player.position.x - Math.sin(yaw) * back,
+      player.position.y + height,
+      player.position.z - Math.cos(yaw) * back,
     );
-    current.current.lerp(desired, 0.06);
+
+    if (!current.current) {
+      current.current = desired.clone();
+    } else {
+      current.current.lerp(desired, 0.12);
+    }
     camera.position.copy(current.current);
-    camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
+
+    look.current.set(
+      player.position.x,
+      player.position.y + 1.35,
+      player.position.z,
+    );
+    camera.lookAt(look.current);
   });
 
   return null;
@@ -794,8 +820,8 @@ function PlayerController({
     const prevX = player.position.x;
     const prevZ = player.position.z;
 
-    const accel = 34;
-    const maxSpeed = 8.5;
+    const accel = 42;
+    const maxSpeed = 11;
     const damp = Math.pow(0.84, delta * 60);
     const input = new Vector3(
       (keys.current.right ? 1 : 0) - (keys.current.left ? 1 : 0),
@@ -828,7 +854,7 @@ function PlayerController({
       const dx = player.position.x - landmark.position[0];
       const dz = player.position.z - landmark.position[2];
       const dist = Math.hypot(dx, dz);
-      const minDist = 1.8;
+      const minDist = 2.4;
       if (dist < minDist && dist > 0.001) {
         const push = (minDist - dist) / minDist;
         player.position.x += (dx / dist) * push * 0.4;
@@ -844,7 +870,7 @@ function PlayerController({
       player.position.x = prevX;
       player.position.z = prevZ;
       velocity.current.multiplyScalar(-0.2);
-    } else if (groundY - player.position.y > 1.8) {
+    } else if (groundY - player.position.y > 2.8) {
       player.position.x = prevX;
       player.position.z = prevZ;
       velocity.current.multiplyScalar(-0.15);
@@ -911,7 +937,7 @@ function WorldContents({
   const groundYs = useMemo(() => {
     if (!sampler) return null;
     return {
-      name: sampler(0, -5.5) ?? 0,
+      name: sampler(0, -16) ?? 0,
       landmarks: knowMeLandmarks.map(
         (l) => sampler(l.position[0], l.position[2]) ?? 0,
       ),
@@ -986,25 +1012,25 @@ export function KnowMeWorldScene({
       className="knowme-world-canvas"
       shadows
       dpr={[1, 1.5]}
-      camera={{ position: [10.5, 8.2, 10.5], fov: 42, near: 0.1, far: 200 }}
+      camera={{ position: [0, 3.2, 6], fov: 50, near: 0.1, far: 500 }}
       gl={{ antialias: true, alpha: false }}
     >
       <color attach="background" args={[NIGHT_BG]} />
-      <fog attach="fog" args={[NIGHT_BG, 34, 110]} />
+      <fog attach="fog" args={[NIGHT_BG, 55, 220]} />
 
       <ambientLight color="#d9c4ff" intensity={0.35} />
       <hemisphereLight args={["#c77aff", "#12041f", 0.42]} />
       <directionalLight
         castShadow
         color="#ffa8d4"
-        position={[24, 36, 16]}
+        position={[48, 70, 32]}
         intensity={1.15}
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-60}
-        shadow-camera-right={60}
-        shadow-camera-top={60}
-        shadow-camera-bottom={-60}
-        shadow-camera-far={140}
+        shadow-camera-left={-160}
+        shadow-camera-right={160}
+        shadow-camera-top={160}
+        shadow-camera-bottom={-160}
+        shadow-camera-far={280}
       />
 
       <Stars radius={90} depth={30} count={1600} factor={4} fade speed={0.5} />
