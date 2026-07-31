@@ -60,8 +60,8 @@ const NIGHT_BG = "#170929";
 const EMBER = "#ff6a3d";
 const GLOW_WHITE = "#fff4ec";
 
-/** Tune these if the village needs nudging — world units per model unit */
-const MAP_SCALE = 0.012;
+/** Target village footprint (world units). Auto-scale from the GLB bbox. */
+const MAP_TARGET_WIDTH = 72;
 
 function prepareShadows(root: Object3D) {
   root.traverse((child) => {
@@ -133,8 +133,9 @@ function useGridTexture() {
   }, []);
 }
 
-function GridFloor() {
+function GridFloor({ visible = true }: { visible?: boolean }) {
   const texture = useGridTexture();
+  if (!visible) return null;
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} receiveShadow>
       <circleGeometry args={[160, 64]} />
@@ -210,21 +211,57 @@ function LoadingStage() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Village map — scaled, centered, ground-aligned; provides a sampler  */
-/* so everything else can sit on the terrain                           */
+/* Village map — auto-scaled + plaza-aligned so the player spawns      */
+/* INSIDE the village bowl, not on the outer mountain cliffs.          */
 /* ------------------------------------------------------------------ */
-type GroundSampler = (x: number, z: number, fallback?: number) => number;
+type GroundSampler = (
+  x: number,
+  z: number,
+  fallback?: number,
+) => number | null;
 
 function createGroundSampler(root: Object3D): GroundSampler {
   const raycaster = new Raycaster();
   const down = new Vector3(0, -1, 0);
   const origin = new Vector3();
-  return (x, z, fallback = 0) => {
-    origin.set(x, 200, z);
+  return (x, z, fallback) => {
+    origin.set(x, 400, z);
     raycaster.set(origin, down);
     const hits = raycaster.intersectObject(root, true);
-    return hits.length > 0 ? hits[0].point.y : fallback;
+    if (hits.length > 0) return hits[0].point.y;
+    return fallback === undefined ? null : fallback;
   };
+}
+
+/** Find the largest cluster of low, flat ground — the village plaza. */
+function findPlazaOffset(sampler: GroundSampler, halfExtent: number) {
+  const step = 1.5;
+  const samples: Array<{ x: number; z: number; y: number }> = [];
+  for (let x = -halfExtent; x <= halfExtent; x += step) {
+    for (let z = -halfExtent; z <= halfExtent; z += step) {
+      const y = sampler(x, z);
+      if (y !== null) samples.push({ x, z, y });
+    }
+  }
+  if (samples.length === 0) return { x: 0, z: 0, y: 0 };
+
+  samples.sort((a, b) => a.y - b.y);
+  const yCut = samples[Math.floor(samples.length * 0.22)]?.y ?? samples[0].y;
+  const lows = samples.filter((s) => s.y <= yCut + 1.0);
+
+  let best = lows[0] ?? samples[0];
+  let bestScore = -1;
+  for (const p of lows) {
+    let neighbors = 0;
+    for (const o of lows) {
+      if (Math.hypot(o.x - p.x, o.z - p.z) < 8) neighbors += 1;
+    }
+    if (neighbors > bestScore) {
+      bestScore = neighbors;
+      best = p;
+    }
+  }
+  return best;
 }
 
 function MapModel({ onReady }: { onReady: (sampler: GroundSampler) => void }) {
@@ -234,22 +271,36 @@ function MapModel({ onReady }: { onReady: (sampler: GroundSampler) => void }) {
     const cloned = scene.clone(true);
     prepareShadows(cloned);
 
+    // 1) Scale so the village footprint is a playable size
+    const rawBox = new Box3().setFromObject(cloned);
+    const rawSize = new Vector3();
+    rawBox.getSize(rawSize);
+    const scale = MAP_TARGET_WIDTH / Math.max(rawSize.x, rawSize.z, 1);
+
     const wrapper = new Group();
     wrapper.add(cloned);
-    wrapper.scale.setScalar(MAP_SCALE);
+    wrapper.scale.setScalar(scale);
     wrapper.updateMatrixWorld(true);
 
-    // center the footprint on the origin
-    const box = new Box3().setFromObject(wrapper);
+    // 2) Center the bounding-box footprint on the origin
+    let box = new Box3().setFromObject(wrapper);
     const center = new Vector3();
     box.getCenter(center);
     wrapper.position.x -= center.x;
     wrapper.position.z -= center.z;
     wrapper.updateMatrixWorld(true);
 
-    // drop the terrain so the ground at the spawn point sits at y = 0
+    // 3) The geometric center is often a cliff for this model —
+    //    find the real village plaza (largest low/flat cluster) and shift there.
     const preSampler = createGroundSampler(wrapper);
-    const spawnGround = preSampler(0, 0, box.min.y);
+    const plaza = findPlazaOffset(preSampler, MAP_TARGET_WIDTH * 0.55);
+    wrapper.position.x -= plaza.x;
+    wrapper.position.z -= plaza.z;
+    wrapper.updateMatrixWorld(true);
+
+    // 4) Drop the plaza ground to y = 0
+    const midSampler = createGroundSampler(wrapper);
+    const spawnGround = midSampler(0, 0, plaza.y);
     wrapper.position.y -= spawnGround;
     wrapper.updateMatrixWorld(true);
 
@@ -428,15 +479,15 @@ function LandmarkStone({
 /* ---------------------------------------------- */
 function NameMonument({ groundY }: { groundY: number }) {
   return (
-    <group position={[0, groundY, -9.5]}>
+    <group position={[0, groundY, -5.5]}>
       <Center disableY>
         <Text3D
           font={KNOWME_TITLE_FONT}
-          size={1.6}
-          height={0.6}
+          size={1.1}
+          height={0.45}
           bevelEnabled
-          bevelThickness={0.045}
-          bevelSize={0.035}
+          bevelThickness={0.035}
+          bevelSize={0.028}
           bevelSegments={3}
           curveSegments={8}
           castShadow
@@ -489,11 +540,11 @@ function Lamp({
 /* Spawn circle — glowing ring + hand-written hint text  */
 /* ---------------------------------------------------- */
 function SpawnArea({ sampler }: { sampler: GroundSampler }) {
-  const hintY = sampler(0, 5.4) + 0.08;
+  const hintY = (sampler(0, 3.8) ?? 0) + 0.08;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <ringGeometry args={[3.1, 3.24, 72]} />
+        <ringGeometry args={[2.4, 2.55, 72]} />
         <meshStandardMaterial
           color={GLOW_WHITE}
           emissive={GLOW_WHITE}
@@ -504,9 +555,9 @@ function SpawnArea({ sampler }: { sampler: GroundSampler }) {
       </mesh>
       <Text
         font={KNOWME_HAND_FONT}
-        position={[0, hintY, 5.4]}
+        position={[0, hintY, 3.8]}
         rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.78}
+        fontSize={0.55}
         color="#ffffff"
         anchorX="center"
         anchorY="middle"
@@ -786,13 +837,14 @@ function PlayerController({
       }
     }
 
-    // terrain follow — walls (steep rises) block, slopes are walked
-    const groundY = sampler(
-      player.position.x,
-      player.position.z,
-      player.position.y,
-    );
-    if (groundY - player.position.y > 2.2) {
+    // terrain follow — stay on village mesh; walls (steep rises) block
+    const groundY = sampler(player.position.x, player.position.z);
+    if (groundY === null) {
+      // walked off the map mesh — snap back
+      player.position.x = prevX;
+      player.position.z = prevZ;
+      velocity.current.multiplyScalar(-0.2);
+    } else if (groundY - player.position.y > 1.8) {
       player.position.x = prevX;
       player.position.z = prevZ;
       velocity.current.multiplyScalar(-0.15);
@@ -859,11 +911,11 @@ function WorldContents({
   const groundYs = useMemo(() => {
     if (!sampler) return null;
     return {
-      name: sampler(0, -9.5),
-      landmarks: knowMeLandmarks.map((l) =>
-        sampler(l.position[0], l.position[2]),
+      name: sampler(0, -5.5) ?? 0,
+      landmarks: knowMeLandmarks.map(
+        (l) => sampler(l.position[0], l.position[2]) ?? 0,
       ),
-      lamps: knowMeLamps.map(([x, z]) => sampler(x, z)),
+      lamps: knowMeLamps.map(([x, z]) => sampler(x, z) ?? 0),
     };
   }, [sampler]);
 
@@ -957,7 +1009,7 @@ export function KnowMeWorldScene({
 
       <Stars radius={90} depth={30} count={1600} factor={4} fade speed={0.5} />
 
-      <GridFloor />
+      <GridFloor visible={!started} />
       {!started && <LoadingStage />}
       {!started && <LoaderCamera />}
 

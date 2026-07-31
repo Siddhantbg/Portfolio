@@ -16,9 +16,11 @@ export interface KnowMeLandmark {
  * Resume landmarks — glowing standing stones scattered around the night world.
  * Walk near one and press Enter to open it.
  */
+/**
+ * Landmark positions are relative to the village plaza (world origin after
+ * MapModel auto-aligns). Keep them inside the bowl — not on the mountain cliffs.
+ */
 export const knowMeLandmarks: KnowMeLandmark[] = [
-  // Positions leave the northern corridor (x ±9, z -13..-7) clear
-  // for the 3D name monument — no stones or paths cross it.
   {
     id: "shl",
     label: "SHL Recommender",
@@ -26,7 +28,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "shl-recommender")?.links.github ??
       profile.github,
-    position: [-21, 0, -8],
+    position: [-6, 0, -3],
     rotationY: 0.4,
     seed: 0.1,
   },
@@ -37,7 +39,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "ai-code-review")?.links.github ??
       profile.github,
-    position: [25, 0, 4],
+    position: [9, 0, 4.5],
     rotationY: 1.2,
     seed: 0.28,
   },
@@ -48,7 +50,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "medical-ai")?.links.github ??
       profile.github,
-    position: [-25, 0, 5],
+    position: [-10.5, 0, 1.5],
     rotationY: 2.1,
     seed: 0.45,
   },
@@ -59,7 +61,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     href:
       projects.find((p) => p.id === "cnn-quantization")?.links.github ??
       profile.github,
-    position: [15, 0, 20],
+    position: [1.5, 0, 4.5],
     rotationY: 0.8,
     seed: 0.62,
   },
@@ -68,7 +70,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     label: "GitHub",
     subtitle: "All repos · Siddhantbg",
     href: profile.github,
-    position: [21, 0, -9],
+    position: [1.5, 0, -4.5],
     rotationY: 1.5,
     seed: 0.8,
   },
@@ -77,7 +79,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
     label: "LinkedIn",
     subtitle: "Connect · hire path",
     href: profile.linkedin,
-    position: [-13, 0, 21],
+    position: [-4.5, 0, 3],
     rotationY: 2.8,
     seed: 0.95,
   },
@@ -136,16 +138,14 @@ export const knowMeDecorStones: Array<{
   { position: [19, 0, 12], scale: 0.95, rotationY: 0.2, seed: 0.97 },
 ];
 
-/** Lamp posts [x, z, rotY] — roughly along the paths */
+/** Lamp posts [x, z, rotY] — around the village plaza */
 export const knowMeLamps: Array<[number, number, number]> = [
-  [-10.5, -4, 0.8],
-  [10.5, -4.5, -2.2],
-  [7, 10, 1.6],
-  [-6.5, 10.5, 0.4],
-  [-12.5, 2.5, 2.1],
-  [12.5, 2, -0.6],
-  [-17, -6.5, 1.1],
-  [17, -7.5, -1.4],
+  [-3.5, -2.5, 0.8],
+  [3.5, -2.5, -2.2],
+  [4, 3, 1.6],
+  [-4, 3, 0.4],
+  [0, 6, 2.1],
+  [7, 1, -0.6],
 ];
 
 export const KNOWME_AVATAR_PATH = "/models/animations/Developer.glb";
@@ -159,5 +159,6 @@ export const KNOWME_TITLE_FONT = "/fonts/helvetiker_bold.typeface.json";
 export const KNOWME_MAP_CREDIT =
   'Map: "Kakariko Village (Ocarina of Time)" by XanderPriest281 · CC-BY-4.0';
 
-export const MAP_RADIUS = 34;
-export const LANDMARK_ENTER_RADIUS = 3;
+/** Keep the player inside the village bowl (map footprint ~60×72). */
+export const MAP_RADIUS = 26;
+export const LANDMARK_ENTER_RADIUS = 2.6;
