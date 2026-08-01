@@ -573,7 +573,7 @@ function SpawnArea({ sampler }: { sampler: GroundSampler }) {
         outlineWidth={0.02}
         outlineColor={NIGHT_BG}
       >
-        {"WASD TO WALK · DRAG MOUSE TO LOOK\nENTER OPENS A GLOWING STONE"}
+        {"WASD TO WALK · MOVE MOUSE TO LOOK\nENTER OPENS A GLOWING STONE"}
       </Text>
     </group>
   );
@@ -715,57 +715,56 @@ function OrbitFollowCamera({
   const { camera, gl } = useThree();
   const current = useRef<Vector3 | null>(null);
   const look = useRef(new Vector3());
-  const dragging = useRef(false);
-  const last = useRef({ x: 0, y: 0 });
+  const last = useRef<{ x: number; y: number } | null>(null);
   const pausedRef = useRef(paused);
 
   useEffect(() => {
     pausedRef.current = paused;
-    if (paused) dragging.current = false;
+    if (paused) last.current = null;
   }, [paused]);
 
   useEffect(() => {
     const el = gl.domElement;
-    el.style.cursor = "grab";
+    el.style.cursor = "none";
 
-    const onDown = (event: PointerEvent) => {
-      if (pausedRef.current || event.button !== 0) return;
-      dragging.current = true;
+    // Hover look — moving the mouse over the canvas aims the camera
+    // (no click/drag). Sensitivity is tuned for third-person feel.
+    const SENS_X = 0.0038;
+    const SENS_Y = 0.0028;
+
+    const onEnter = (event: PointerEvent) => {
       last.current = { x: event.clientX, y: event.clientY };
-      el.style.cursor = "grabbing";
-      el.setPointerCapture(event.pointerId);
+    };
+    const onLeave = () => {
+      last.current = null;
     };
     const onMove = (event: PointerEvent) => {
-      if (!dragging.current || pausedRef.current) return;
+      if (pausedRef.current) return;
+      if (!last.current) {
+        last.current = { x: event.clientX, y: event.clientY };
+        return;
+      }
       const dx = event.clientX - last.current.x;
       const dy = event.clientY - last.current.y;
       last.current = { x: event.clientX, y: event.clientY };
-      // Drag right → look right (orbit around player)
-      orbitRef.current.yaw -= dx * 0.0055;
+
+      // Ignore huge jumps (entering window / alt-tab)
+      if (Math.abs(dx) > 80 || Math.abs(dy) > 80) return;
+
+      orbitRef.current.yaw -= dx * SENS_X;
       orbitRef.current.pitch = Math.max(
         0.12,
-        Math.min(1.15, orbitRef.current.pitch + dy * 0.004),
+        Math.min(1.15, orbitRef.current.pitch + dy * SENS_Y),
       );
     };
-    const onUp = (event: PointerEvent) => {
-      dragging.current = false;
-      el.style.cursor = "grab";
-      try {
-        el.releasePointerCapture(event.pointerId);
-      } catch {
-        // ignore
-      }
-    };
 
-    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointerenter", onEnter);
+    el.addEventListener("pointerleave", onLeave);
     el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onUp);
     return () => {
-      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointerenter", onEnter);
+      el.removeEventListener("pointerleave", onLeave);
       el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onUp);
       el.style.cursor = "";
     };
   }, [gl, orbitRef]);
@@ -785,7 +784,6 @@ function OrbitFollowCamera({
     if (!current.current) {
       current.current = desired.clone();
     } else {
-      // Swift follow — camera catches up quickly without fighting WASD
       current.current.lerp(desired, 0.22);
     }
     camera.position.copy(current.current);
