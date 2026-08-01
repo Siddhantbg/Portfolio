@@ -573,7 +573,7 @@ function SpawnArea({ sampler }: { sampler: GroundSampler }) {
         outlineWidth={0.02}
         outlineColor={NIGHT_BG}
       >
-        {"USE WASD / ARROWS TO WALK\nENTER OPENS A GLOWING STONE"}
+        {"WASD TO WALK · DRAG MOUSE TO LOOK\nENTER OPENS A GLOWING STONE"}
       </Text>
     </group>
   );
@@ -682,8 +682,13 @@ function PlayerAvatar({ speedRef }: { speedRef: RefObject<number> }) {
 }
 
 /* --------------------------------------- */
-/* Cameras                                  */
+/* Cameras — mouse orbits, WASD only moves  */
 /* --------------------------------------- */
+interface CameraOrbit {
+  yaw: number;
+  pitch: number;
+}
+
 function LoaderCamera() {
   const { camera } = useThree();
   useFrame(({ clock }) => {
@@ -698,29 +703,90 @@ function LoaderCamera() {
   return null;
 }
 
-function FollowCamera({ target }: { target: RefObject<Group | null> }) {
-  const { camera } = useThree();
+function OrbitFollowCamera({
+  target,
+  orbitRef,
+  paused,
+}: {
+  target: RefObject<Group | null>;
+  orbitRef: RefObject<CameraOrbit>;
+  paused: boolean;
+}) {
+  const { camera, gl } = useThree();
   const current = useRef<Vector3 | null>(null);
   const look = useRef(new Vector3());
+  const dragging = useRef(false);
+  const last = useRef({ x: 0, y: 0 });
+  const pausedRef = useRef(paused);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+    if (paused) dragging.current = false;
+  }, [paused]);
+
+  useEffect(() => {
+    const el = gl.domElement;
+    el.style.cursor = "grab";
+
+    const onDown = (event: PointerEvent) => {
+      if (pausedRef.current || event.button !== 0) return;
+      dragging.current = true;
+      last.current = { x: event.clientX, y: event.clientY };
+      el.style.cursor = "grabbing";
+      el.setPointerCapture(event.pointerId);
+    };
+    const onMove = (event: PointerEvent) => {
+      if (!dragging.current || pausedRef.current) return;
+      const dx = event.clientX - last.current.x;
+      const dy = event.clientY - last.current.y;
+      last.current = { x: event.clientX, y: event.clientY };
+      // Drag right → look right (orbit around player)
+      orbitRef.current.yaw -= dx * 0.0055;
+      orbitRef.current.pitch = Math.max(
+        0.12,
+        Math.min(1.15, orbitRef.current.pitch + dy * 0.004),
+      );
+    };
+    const onUp = (event: PointerEvent) => {
+      dragging.current = false;
+      el.style.cursor = "grab";
+      try {
+        el.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      el.style.cursor = "";
+    };
+  }, [gl, orbitRef]);
 
   useFrame(() => {
     const player = target.current;
     if (!player) return;
 
-    // Third-person: sit behind the character based on facing yaw
-    const yaw = player.rotation.y;
-    const back = 5.2;
-    const height = 2.35;
+    const { yaw, pitch } = orbitRef.current;
+    const dist = 5.6;
     const desired = new Vector3(
-      player.position.x - Math.sin(yaw) * back,
-      player.position.y + height,
-      player.position.z - Math.cos(yaw) * back,
+      player.position.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+      player.position.y + Math.sin(pitch) * dist + 0.55,
+      player.position.z + Math.cos(yaw) * Math.cos(pitch) * dist,
     );
 
     if (!current.current) {
       current.current = desired.clone();
     } else {
-      current.current.lerp(desired, 0.12);
+      // Swift follow — camera catches up quickly without fighting WASD
+      current.current.lerp(desired, 0.22);
     }
     camera.position.copy(current.current);
 
@@ -736,11 +802,12 @@ function FollowCamera({ target }: { target: RefObject<Group | null> }) {
 }
 
 /* ---------------------------------------------------------- */
-/* Keyboard controller — walk, face, terrain-follow, collide    */
+/* Keyboard controller — WASD moves; mouse aims the camera     */
 /* ---------------------------------------------------------- */
 interface PlayerControllerProps {
   playerRef: RefObject<Group | null>;
   speedRef: RefObject<number>;
+  orbitRef: RefObject<CameraOrbit>;
   sampler: GroundSampler;
   paused: boolean;
   onNearestChange: (landmark: KnowMeLandmark | null) => void;
@@ -750,12 +817,12 @@ interface PlayerControllerProps {
 function PlayerController({
   playerRef,
   speedRef,
+  orbitRef,
   sampler,
   paused,
   onNearestChange,
   onActivate,
 }: PlayerControllerProps) {
-  const { camera } = useThree();
   const keys = useRef({ up: false, down: false, left: false, right: false });
   const velocity = useRef(new Vector3());
   const heading = useRef(0);
@@ -839,16 +906,11 @@ function PlayerController({
     const prevX = player.position.x;
     const prevZ = player.position.z;
 
-    // Camera-relative WASD (screen-space):
-    // W = into the screen / forward, S = back, A = left, D = right
-    camera.getWorldDirection(forward.current);
-    forward.current.y = 0;
-    if (forward.current.lengthSq() < 1e-6) {
-      forward.current.set(0, 0, -1);
-    } else {
-      forward.current.normalize();
-    }
-    right.current.set(forward.current.z, 0, -forward.current.x);
+    // Move relative to mouse-aimed camera yaw (not character facing),
+    // so WASD never steers the camera by itself.
+    const yaw = orbitRef.current.yaw;
+    forward.current.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    right.current.set(Math.cos(yaw), 0, -Math.sin(yaw));
 
     const fwd =
       (keys.current.up ? 1 : 0) - (keys.current.down ? 1 : 0);
@@ -875,7 +937,6 @@ function PlayerController({
     player.position.x += velocity.current.x * delta;
     player.position.z += velocity.current.z * delta;
 
-    // stay inside the world
     const radial = Math.hypot(player.position.x, player.position.z);
     if (radial > MAP_RADIUS - 0.5) {
       const s = (MAP_RADIUS - 0.5) / radial;
@@ -884,7 +945,6 @@ function PlayerController({
       velocity.current.multiplyScalar(0.4);
     }
 
-    // soft collision with landmark rocks
     for (const landmark of knowMeLandmarks) {
       const dx = player.position.x - landmark.position[0];
       const dz = player.position.z - landmark.position[2];
@@ -898,7 +958,6 @@ function PlayerController({
       }
     }
 
-    // terrain follow — stay on village mesh; walls (steep rises) block
     const groundY = sampler(player.position.x, player.position.z);
     if (groundY === null) {
       player.position.x = prevX;
@@ -915,17 +974,16 @@ function PlayerController({
     const speed = velocity.current.length();
     speedRef.current = speed;
 
-    // Face the direction of travel (camera-relative forward when moving)
+    // Character faces walk direction; camera stays on mouse orbit
     if (speed > 0.25) {
-      const target = Math.atan2(velocity.current.x, velocity.current.z);
-      let diff = target - heading.current;
+      const targetYaw = Math.atan2(velocity.current.x, velocity.current.z);
+      let diff = targetYaw - heading.current;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       heading.current += diff * Math.min(1, delta * 12);
       player.rotation.y = heading.current;
     }
 
-    // nearest landmark within reach
     let best: KnowMeLandmark | null = null;
     let bestDist = LANDMARK_ENTER_RADIUS;
     for (const landmark of knowMeLandmarks) {
@@ -965,6 +1023,7 @@ function WorldContents({
 }) {
   const playerRef = useRef<Group>(null);
   const speedRef = useRef(0);
+  const orbitRef = useRef<CameraOrbit>({ yaw: Math.PI, pitch: 0.38 });
   const [sampler, setSampler] = useState<GroundSampler | null>(null);
 
   // terrain heights are raycasts against the village mesh — compute once
@@ -1014,12 +1073,19 @@ function WorldContents({
           <PlayerController
             playerRef={playerRef}
             speedRef={speedRef}
+            orbitRef={orbitRef}
             sampler={sampler}
             paused={paused || !visible}
             onNearestChange={onNearestChange}
             onActivate={onActivate}
           />
-          {visible && <FollowCamera target={playerRef} />}
+          {visible && (
+            <OrbitFollowCamera
+              target={playerRef}
+              orbitRef={orbitRef}
+              paused={paused || !visible}
+            />
+          )}
         </>
       )}
     </group>
