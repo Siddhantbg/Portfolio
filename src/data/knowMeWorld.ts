@@ -88,7 +88,7 @@ export const knowMeLandmarks: KnowMeLandmark[] = [
 export const knowMeWorldMeta = {
   title: "KNOW ME · NIGHT WORLD",
   subtitle: "Walk around · find the glowing stones · press Enter",
-  controls: "WASD / Arrows to walk · Enter to open the nearest stone",
+  controls: "WASD to walk · drag mouse to look · Enter to open a stone",
 };
 
 /** Decorative low-poly trees [x, z, scale, hueShift] */
