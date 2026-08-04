@@ -2,12 +2,10 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useProgress } from "@react-three/drei";
-import {
-  KNOWME_MAP_CREDIT,
-  knowMeWorldMeta,
-  type KnowMeLandmark,
-} from "@/data/knowMeWorld";
+import { KNOWME_MAP_CREDIT, knowMeWorldMeta } from "@/data/knowMeWorld";
+import { profile } from "@/data/portfolio";
 import { playUiSelectSound } from "@/lib/sfx";
 
 const KnowMeWorldScene = dynamic(
@@ -18,63 +16,72 @@ const KnowMeWorldScene = dynamic(
   { ssr: false },
 );
 
-/* ----------------------------------------------------------- */
-/* Click-to-start — hand-drawn text over the idle world         */
-/* ----------------------------------------------------------- */
-function ClickToStart({ onStart }: { onStart: () => void }) {
-  return (
-    <button type="button" className="knowme-start-overlay" onClick={onStart}>
-      <span className="knowme-start-note" aria-hidden>
-        <svg
-          className="knowme-start-arrow"
-          viewBox="0 0 90 70"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M82 8 C 60 30, 40 34, 14 44" />
-          <path d="M26 34 L 12 45 L 30 52" />
-        </svg>
-        <span className="knowme-start-text">
-          CLICK TO
-          <br />
-          START
-        </span>
-        <span className="knowme-start-sound">🔊 sound on</span>
-      </span>
-    </button>
-  );
-}
+type KnowMePhase = "welcome" | "map";
 
 interface KnowMeWorldModalProps {
   open: boolean;
   onClose: () => void;
 }
 
+function WelcomeScreen({ onExplore }: { onExplore: () => void }) {
+  const firstName = profile.name.split(" ")[0];
+  const introName = firstName.charAt(0) + firstName.slice(1).toLowerCase();
+
+  return (
+    <div className="knowme-welcome">
+      <div className="knowme-welcome-inner">
+        <h1 className="knowme-welcome-title">WELCOME TO MY WORLD!</h1>
+        <p className="knowme-welcome-copy">
+          I&apos;m {introName}, an {profile.tagline.replace(" · ", " and ")} who
+          is enthusiastic about building AI systems and full-stack products that
+          feel sharp, playful, and useful.
+        </p>
+        <button type="button" className="knowme-welcome-cta" onClick={onExplore}>
+          EXPLORE MY WORLD →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LoadingOverlay() {
+  return (
+    <div className="knowme-loading" role="status" aria-live="polite">
+      <span className="knowme-loading-pulse" aria-hidden />
+      ENTERING CITY…
+    </div>
+  );
+}
+
 export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
-  const [started, setStarted] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [phase, setPhase] = useState<KnowMePhase>("welcome");
   const [graceOver, setGraceOver] = useState(false);
-  const [nearest, setNearest] = useState<KnowMeLandmark | null>(null);
-  const [active, setActive] = useState<KnowMeLandmark | null>(null);
   const { active: loading } = useProgress();
 
-  // Assets may be cached from a previous visit and never report progress,
-  // so also consider the world ready once nothing is loading after a beat.
-  const ready = graceOver && !loading;
+  // Cached assets may never report progress, so consider the city ready once
+  // nothing is loading after a short grace period.
+  const cityReady = graceOver && !loading;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) {
-      setStarted(false);
+      setPhase("welcome");
       setGraceOver(false);
-      setNearest(null);
-      setActive(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (phase !== "map") {
+      setGraceOver(false);
       return;
     }
-    const timer = window.setTimeout(() => setGraceOver(true), 700);
+    const timer = window.setTimeout(() => setGraceOver(true), 800);
     return () => window.clearTimeout(timer);
-  }, [open]);
+  }, [phase]);
 
   useEffect(() => {
     if (!open) return;
@@ -82,8 +89,8 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      if (active) {
-        setActive(null);
+      if (phase === "map") {
+        setPhase("welcome");
         return;
       }
       onClose();
@@ -96,20 +103,18 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [open, onClose, active]);
+  }, [open, onClose, phase]);
 
-  const activateLandmark = useCallback((landmark: KnowMeLandmark) => {
+  const enterMap = useCallback(() => {
     playUiSelectSound();
-    setActive(landmark);
-    window.open(landmark.href, "_blank", "noopener,noreferrer");
+    setPhase("map");
   }, []);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       className="knowme-modal-backdrop knowme-night-backdrop"
-      onClick={onClose}
       role="presentation"
     >
       <div
@@ -117,7 +122,6 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label={knowMeWorldMeta.title}
-        onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
@@ -128,78 +132,31 @@ export function KnowMeWorldModal({ open, onClose }: KnowMeWorldModalProps) {
           ×
         </button>
 
-        <div className="knowme-world-stage">
-            <KnowMeWorldScene
-              started={started}
-              paused={!started || active !== null}
-              nearestId={nearest?.id ?? null}
-              onNearestChange={setNearest}
-              onActivate={activateLandmark}
-            />
+        {phase === "welcome" ? (
+          <WelcomeScreen onExplore={enterMap} />
+        ) : (
+          <div className="knowme-world-stage">
+            <KnowMeWorldScene />
 
-            {ready && !started && (
-              <ClickToStart
-                onStart={() => {
-                  playUiSelectSound();
-                  setStarted(true);
-                }}
-              />
-            )}
+            {!cityReady && <LoadingOverlay />}
 
-            {started && nearest && !active && (
-              <div className="knowme-night-prompt">
-                <span className="knowme-night-prompt-key">⏎</span>
-                OPEN {nearest.label.toUpperCase()}
+            {cityReady && (
+              <div className="knowme-hud-controls" aria-hidden>
+                <span className="knowme-hud-key">WASD</span> fly
+                <span className="knowme-hud-sep">·</span>
+                <span className="knowme-hud-key">SPACE</span> up
+                <span className="knowme-hud-sep">·</span>
+                <span className="knowme-hud-key">SHIFT</span> down
+                <span className="knowme-hud-sep">·</span>
+                <span className="knowme-hud-key">ESC</span> back
               </div>
             )}
 
-            {started && (
-              <p className="knowme-night-credit">{KNOWME_MAP_CREDIT}</p>
-            )}
-
-            {active && (
-              <div
-                className="knowme-night-panel-backdrop"
-                onClick={() => setActive(null)}
-                role="presentation"
-              >
-                <div
-                  className="knowme-night-card"
-                  role="dialog"
-                  aria-label={active.label}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <header className="knowme-night-card-header">
-                    <div>
-                      <p className="knowme-night-card-kicker">Resume stone</p>
-                      <h3 className="knowme-night-card-title">{active.label}</h3>
-                    </div>
-                    <button
-                      type="button"
-                      className="knowme-night-card-close"
-                      onClick={() => {
-                        playUiSelectSound();
-                        setActive(null);
-                      }}
-                    >
-                      CLOSE
-                    </button>
-                  </header>
-                  <p className="knowme-night-card-sub">{active.subtitle}</p>
-                  <a
-                    href={active.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="knowme-night-card-link"
-                    onClick={() => playUiSelectSound()}
-                  >
-                    Open link ↗
-                  </a>
-                </div>
-              </div>
-            )}
-        </div>
+            <p className="knowme-night-credit">{KNOWME_MAP_CREDIT}</p>
+          </div>
+        )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

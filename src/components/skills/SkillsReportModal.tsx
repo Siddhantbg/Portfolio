@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import playerPhoto from "@/assets/Educational/2026.jpg";
 import skillsReport from "@/data/skillsReport.json";
@@ -94,6 +95,12 @@ function CategoryIcon({ name }: { name: string }) {
 }
 
 export function SkillsReportModal({ open, onClose }: SkillsReportModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
 
@@ -111,9 +118,9 @@ export function SkillsReportModal({ open, onClose }: SkillsReportModalProps) {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div className="skills-modal-backdrop" onClick={onClose} role="presentation">
       <div
         className="skills-modal-panel"
@@ -122,15 +129,6 @@ export function SkillsReportModal({ open, onClose }: SkillsReportModalProps) {
         aria-labelledby="skills-modal-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          type="button"
-          className="skills-modal-close"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          ×
-        </button>
-
         <div className="skills-report-grid">
           {/* ── Left: Squad Report ── */}
           <section className="skills-left">
@@ -214,7 +212,15 @@ export function SkillsReportModal({ open, onClose }: SkillsReportModalProps) {
             </div>
 
             <div className="skills-keystrength">
-              <span className="skills-keystrength-mark">✕</span>
+              <button
+                type="button"
+                className="skills-keystrength-mark"
+                onClick={onClose}
+                aria-label="Close skills report"
+                title="Close"
+              >
+                ✕
+              </button>
               Key Strength: {report.keyStrength}
             </div>
           </section>
@@ -259,6 +265,7 @@ export function SkillsReportModal({ open, onClose }: SkillsReportModalProps) {
           </section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

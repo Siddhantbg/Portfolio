@@ -57,3 +57,6 @@ next-env.d.ts
 
 # Generated from src/assets/songs by scripts/sync-songs.mjs (rebuilt on dev/build)
 /public/songs
+
+# Raw model downloads / zips — only public/models/knowme/*.glb is committed
+/models_new
