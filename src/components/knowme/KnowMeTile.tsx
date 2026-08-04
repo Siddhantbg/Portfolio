@@ -26,16 +26,16 @@ export function KnowMeTile({ navIndex = 1 }: KnowMeTileProps) {
         variant="panel"
         className="tile-area-know"
         navIndex={navIndex}
-        watermark="WORLD"
-        subtitle="3D Night World"
-        description="Walk the night world · find glowing stones · unlock my resume"
+        watermark="CITY"
+        subtitle="Cyber City 2099"
+        description="Fly the neon city · Iron Cameraman · NPC traffic"
         onClick={() => setModalOpen(true)}
       >
         <div className="knowme-tile-preview">
           <span className="knowme-tile-lv">3D</span>
-          <p className="knowme-tile-role">Explore · glowing stones · resume</p>
+          <p className="knowme-tile-role">Fly · explore · night city</p>
         </div>
-        <p className="edu-tile-hint">Click to enter world</p>
+        <p className="edu-tile-hint">Click to enter city</p>
       </Tile>
 
       {modalOpen && (

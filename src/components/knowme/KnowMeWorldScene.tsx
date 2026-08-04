@@ -1,1158 +1,422 @@
 "use client";
 
+/**
+ * KNOW ME · Cyber City — fresh 3D explorer.
+ *
+ * - Neon cyber city map (CyberCity 2099)
+ * - Player: floating "Iron Cameraman" (procedural hover bob), WASD flight
+ * - Third-person chase camera
+ * - NPC traffic: 2 black + 5 white cars looping fixed elliptical routes
+ */
+
+import { useEffect, useMemo, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Stars, useGLTF } from "@react-three/drei";
+import * as THREE from "three";
 import {
-  Suspense,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import {
-  Billboard,
-  Center,
-  Environment,
-  Stars,
-  Text,
-  Text3D,
-  useAnimations,
-  useFBX,
-  useGLTF,
-  useProgress,
-} from "@react-three/drei";
-import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import {
-  Box3,
-  CanvasTexture,
-  Color,
-  Group,
-  LoopRepeat,
-  Mesh,
-  MeshStandardMaterial,
-  Object3D,
-  Raycaster,
-  RepeatWrapping,
-  SRGBColorSpace,
-  Vector3,
-} from "three";
-import {
-  KNOWME_AVATAR_PATH,
-  KNOWME_HAND_FONT,
+  CITY_BOUNDS_RADIUS,
+  CITY_SIZE,
+  FLY_MAX_Y,
+  FLY_MIN_Y,
+  KNOWME_CAR_KOENIGSEGG_PATH,
+  KNOWME_CAR_SONATA_PATH,
   KNOWME_MAP_PATH,
-  KNOWME_RUN_FBX,
-  KNOWME_TITLE_FONT,
-  KNOWME_WALK_FBX,
-  LANDMARK_ENTER_RADIUS,
-  MAP_RADIUS,
-  knowMeLamps,
-  knowMeLandmarks,
-  type KnowMeLandmark,
+  KNOWME_MC_PATH,
+  MC_START,
+  knowMeCars,
+  type KnowMeCarConfig,
 } from "@/data/knowMeWorld";
-import { careerModelAnimations, profile } from "@/data/portfolio";
-import { buildSafeClips } from "@/lib/safe-model-clips";
 
-/* ------------------------------------------------------------------ */
-/* Palette — violet loading void; the village model brings its own     */
-/* colours once the world starts                                       */
-/* ------------------------------------------------------------------ */
-const NIGHT_BG = "#170929";
-const EMBER = "#ff6a3d";
-const GLOW_WHITE = "#fff4ec";
+/* ────────────────────────────────────────────────────────────
+   Helpers
+   ──────────────────────────────────────────────────────────── */
 
-/** Target village footprint (world units). Larger = human-scale streets vs avatar. */
-const MAP_TARGET_WIDTH = 320;
-/** Avatar scale — Ready Player Me sits a bit tall next to low-poly houses. */
-const AVATAR_SCALE = 0.62;
-
-function prepareShadows(root: Object3D) {
+/** Enable shadows + sane texture settings on every mesh of a model. */
+function prepareModel(root: THREE.Object3D, { shadows = true } = {}) {
   root.traverse((child) => {
-    const mesh = child as Mesh;
-    if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    const materials = Array.isArray(mesh.material)
-      ? mesh.material
-      : [mesh.material];
-    for (const mat of materials) {
-      if (mat instanceof MeshStandardMaterial && mat.map) {
-        mat.map.colorSpace = SRGBColorSpace;
-      }
+    if ((child as THREE.Mesh).isMesh) {
+      const mesh = child as THREE.Mesh;
+      mesh.castShadow = shadows;
+      mesh.receiveShadow = shadows;
+      mesh.frustumCulled = true;
     }
   });
 }
 
-/* ------------------------------------------------------------ */
-/* Loader floor — infinite violet grid with × marks              */
-/* ------------------------------------------------------------ */
-function useGridTexture() {
+/**
+ * Fit `scene` into a group so that:
+ * - its longest horizontal side == `sizeXZ` (or height == `sizeY` if given)
+ * - it is centered on x/z
+ * - its lowest point sits at y = 0
+ */
+function useFitted(
+  path: string,
+  opts: { sizeXZ?: number; sizeY?: number },
+): { object: THREE.Group; size: THREE.Vector3 } {
+  const { scene } = useGLTF(path);
+
   return useMemo(() => {
-    const size = 512;
-    const cell = 128;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d")!;
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
 
-    ctx.fillStyle = "#1e0d38";
-    ctx.fillRect(0, 0, size, size);
-
-    ctx.strokeStyle = "rgba(122, 92, 255, 0.20)";
-    ctx.lineWidth = 2;
-    for (let p = 0; p <= size; p += cell) {
-      ctx.beginPath();
-      ctx.moveTo(p, 0);
-      ctx.lineTo(p, size);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, p);
-      ctx.lineTo(size, p);
-      ctx.stroke();
+    let scale = 1;
+    if (opts.sizeY) {
+      scale = opts.sizeY / Math.max(size.y, 0.0001);
+    } else if (opts.sizeXZ) {
+      scale = opts.sizeXZ / Math.max(size.x, size.z, 0.0001);
     }
 
-    ctx.strokeStyle = "rgba(138, 107, 255, 0.55)";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    const arm = 8;
-    for (let x = cell / 2; x < size; x += cell) {
-      for (let y = cell / 2; y < size; y += cell) {
-        ctx.beginPath();
-        ctx.moveTo(x - arm, y - arm);
-        ctx.lineTo(x + arm, y + arm);
-        ctx.moveTo(x + arm, y - arm);
-        ctx.lineTo(x - arm, y + arm);
-        ctx.stroke();
-      }
-    }
-
-    const tex = new CanvasTexture(canvas);
-    tex.wrapS = RepeatWrapping;
-    tex.wrapT = RepeatWrapping;
-    tex.repeat.set(24, 24);
-    tex.anisotropy = 4;
-    tex.colorSpace = SRGBColorSpace;
-    return tex;
-  }, []);
-}
-
-function GridFloor({ visible = true }: { visible?: boolean }) {
-  const texture = useGridTexture();
-  if (!visible) return null;
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} receiveShadow>
-      <circleGeometry args={[160, 64]} />
-      <meshStandardMaterial map={texture} roughness={0.95} metalness={0.05} />
-    </mesh>
-  );
-}
-
-/* ----------------------------------------------------------------- */
-/* Loading ring — a white arc that sweeps from a point to full circle */
-/* ----------------------------------------------------------------- */
-function LoadingStage() {
-  const { progress } = useProgress();
-  const [sweep, setSweep] = useState(0);
-  const displayRef = useRef(0);
-  const targetRef = useRef(0);
-
-  useEffect(() => {
-    targetRef.current = Math.max(targetRef.current, progress);
-  }, [progress]);
-
-  useFrame((_, delta) => {
-    const target = Math.max(targetRef.current, 3);
-    displayRef.current += (target - displayRef.current) * Math.min(1, delta * 2.6);
-    const quantized = Math.min(100, Math.round(displayRef.current));
-    if (quantized !== sweep) setSweep(quantized);
-  });
-
-  const theta = (sweep / 100) * Math.PI * 2;
-
-  return (
-    <group>
-      {/* faint full track */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <ringGeometry args={[2.92, 3.06, 96]} />
-        <meshBasicMaterial
-          color="#7a5cff"
-          transparent
-          opacity={0.18}
-          toneMapped={false}
-        />
-      </mesh>
-      {/* progress arc — grows clockwise from 12 o'clock */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-        <ringGeometry args={[2.88, 3.1, 96, 1, Math.PI / 2, theta]} />
-        <meshBasicMaterial color="#ffffff" toneMapped={false} />
-      </mesh>
-
-      <Text
-        font={KNOWME_HAND_FONT}
-        position={[0, 0.03, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={1.15}
-        color="#ffffff"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {`${sweep}%`}
-      </Text>
-      <Text
-        font={KNOWME_HAND_FONT}
-        position={[0, 0.03, 4.35]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.62}
-        color="#b9a5ff"
-        anchorX="center"
-        anchorY="middle"
-      >
-        LOADING WORLD
-      </Text>
-    </group>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Village map — auto-scaled + plaza-aligned so the player spawns      */
-/* INSIDE the village bowl, not on the outer mountain cliffs.          */
-/* ------------------------------------------------------------------ */
-type GroundSampler = (
-  x: number,
-  z: number,
-  fallback?: number,
-) => number | null;
-
-function createGroundSampler(root: Object3D): GroundSampler {
-  const raycaster = new Raycaster();
-  const down = new Vector3(0, -1, 0);
-  const origin = new Vector3();
-  return (x, z, fallback) => {
-    origin.set(x, 800, z);
-    raycaster.set(origin, down);
-    const hits = raycaster.intersectObject(root, true);
-    if (hits.length === 0) return fallback === undefined ? null : fallback;
-    // Prefer the LOWEST surface — first hit is often a rooftop.
-    let bestY = hits[0].point.y;
-    for (let i = 1; i < hits.length; i += 1) {
-      if (hits[i].point.y < bestY) bestY = hits[i].point.y;
-    }
-    return bestY;
-  };
-}
-
-/** Find the largest cluster of low, flat ground — the village plaza. */
-function findPlazaOffset(sampler: GroundSampler, halfExtent: number) {
-  const step = Math.max(3, halfExtent / 28);
-  const samples: Array<{ x: number; z: number; y: number }> = [];
-  for (let x = -halfExtent; x <= halfExtent; x += step) {
-    for (let z = -halfExtent; z <= halfExtent; z += step) {
-      const y = sampler(x, z);
-      if (y !== null) samples.push({ x, z, y });
-    }
-  }
-  if (samples.length === 0) return { x: 0, z: 0, y: 0 };
-
-  samples.sort((a, b) => a.y - b.y);
-  const yCut = samples[Math.floor(samples.length * 0.22)]?.y ?? samples[0].y;
-  const lows = samples.filter((s) => s.y <= yCut + 2.5);
-
-  let best = lows[0] ?? samples[0];
-  let bestScore = -1;
-  const neighborR = step * 5;
-  for (const p of lows) {
-    let neighbors = 0;
-    for (const o of lows) {
-      if (Math.hypot(o.x - p.x, o.z - p.z) < neighborR) neighbors += 1;
-    }
-    if (neighbors > bestScore) {
-      bestScore = neighbors;
-      best = p;
-    }
-  }
-  return best;
-}
-
-function MapModel({ onReady }: { onReady: (sampler: GroundSampler) => void }) {
-  const { scene } = useGLTF(KNOWME_MAP_PATH);
-
-  const { wrapper, sampler } = useMemo(() => {
-    const cloned = scene.clone(true);
-    prepareShadows(cloned);
-
-    // 1) Scale so the village footprint is a playable size
-    const rawBox = new Box3().setFromObject(cloned);
-    const rawSize = new Vector3();
-    rawBox.getSize(rawSize);
-    const scale = MAP_TARGET_WIDTH / Math.max(rawSize.x, rawSize.z, 1);
-
-    const wrapper = new Group();
-    wrapper.add(cloned);
-    wrapper.scale.setScalar(scale);
-    wrapper.updateMatrixWorld(true);
-
-    // 2) Center the bounding-box footprint on the origin
-    let box = new Box3().setFromObject(wrapper);
-    const center = new Vector3();
-    box.getCenter(center);
-    wrapper.position.x -= center.x;
-    wrapper.position.z -= center.z;
-    wrapper.updateMatrixWorld(true);
-
-    // 3) The geometric center is often a cliff for this model —
-    //    find the real village plaza (largest low/flat cluster) and shift there.
-    const preSampler = createGroundSampler(wrapper);
-    const plaza = findPlazaOffset(preSampler, MAP_TARGET_WIDTH * 0.55);
-    wrapper.position.x -= plaza.x;
-    wrapper.position.z -= plaza.z;
-    wrapper.updateMatrixWorld(true);
-
-    // 4) Drop the plaza ground to y = 0
-    const midSampler = createGroundSampler(wrapper);
-    const spawnGround = midSampler(0, 0, plaza.y);
-    wrapper.position.y -= spawnGround;
-    wrapper.updateMatrixWorld(true);
-
-    return { wrapper, sampler: createGroundSampler(wrapper) };
-  }, [scene]);
-
-  const onReadyRef = useRef(onReady);
-  useEffect(() => {
-    onReadyRef.current = onReady;
-  }, [onReady]);
-
-  useEffect(() => {
-    onReadyRef.current(sampler);
-  }, [sampler]);
-
-  return <primitive object={wrapper} />;
-}
-
-/* --------------------------------------------------------------- */
-/* Procedural landmark rocks — deterministic per seed, always up    */
-/* --------------------------------------------------------------- */
-function seededRand(seed: number, index: number) {
-  const value = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-function StandingRock({ seed }: { seed: number }) {
-  const { color, height, leanZ, leanX, baseRocks } = useMemo(() => {
-    const base = new Color("#9b8fae");
-    base.offsetHSL(
-      (seededRand(seed, 1) - 0.5) * 0.06,
-      0,
-      (seededRand(seed, 2) - 0.5) * 0.08,
+    const group = new THREE.Group();
+    group.add(scene);
+    scene.scale.setScalar(scale);
+    scene.position.set(
+      -center.x * scale,
+      -box.min.y * scale,
+      -center.z * scale,
     );
-    return {
-      color: base,
-      height: 1.55 + seededRand(seed, 3) * 0.5,
-      leanZ: (seededRand(seed, 4) - 0.5) * 0.22,
-      leanX: (seededRand(seed, 5) - 0.5) * 0.14,
-      baseRocks: [0, 1, 2].map((i) => ({
-        x: Math.cos(seededRand(seed, 6 + i) * Math.PI * 2) * (0.85 + seededRand(seed, 9 + i) * 0.35),
-        z: Math.sin(seededRand(seed, 6 + i) * Math.PI * 2) * (0.85 + seededRand(seed, 9 + i) * 0.35),
-        s: 0.3 + seededRand(seed, 12 + i) * 0.28,
-        rot: seededRand(seed, 15 + i) * Math.PI,
-      })),
-    };
-  }, [seed]);
 
-  return (
-    <group>
-      <mesh
-        castShadow
-        receiveShadow
-        position={[0, height * 0.78, 0]}
-        rotation={[leanX, seededRand(seed, 20) * Math.PI, leanZ]}
-        scale={[1.05, height, 0.72]}
-      >
-        <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color={color} roughness={0.9} flatShading />
-      </mesh>
-      {baseRocks.map((rock, i) => (
-        <mesh
-          key={i}
-          castShadow
-          receiveShadow
-          position={[rock.x, rock.s * 0.5, rock.z]}
-          rotation={[0, rock.rot, 0]}
-          scale={[rock.s * 1.3, rock.s * 0.75, rock.s]}
-        >
-          <icosahedronGeometry args={[1, 0]} />
-          <meshStandardMaterial color={color} roughness={0.92} flatShading />
-        </mesh>
-      ))}
-    </group>
-  );
+    prepareModel(scene);
+    return { object: group, size: size.multiplyScalar(scale) };
+  }, [scene, opts.sizeXZ, opts.sizeY]);
 }
 
-/* ------------------------------------------------- */
-/* Landmark — glowing ring + standing rock + label    */
-/* ------------------------------------------------- */
-function LandmarkStone({
-  landmark,
-  active,
-  groundY,
-}: {
-  landmark: KnowMeLandmark;
-  active: boolean;
-  groundY: number;
-}) {
-  const ringMat = useRef<MeshStandardMaterial>(null);
-  const fillMat = useRef<MeshStandardMaterial>(null);
-  const emberColor = useMemo(() => new Color(EMBER), []);
-  const whiteColor = useMemo(() => new Color(GLOW_WHITE), []);
+/* ────────────────────────────────────────────────────────────
+   City map
+   ──────────────────────────────────────────────────────────── */
 
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    const pulse = 0.5 + Math.sin(t * 2.6) * 0.5;
-    if (ringMat.current) {
-      ringMat.current.emissiveIntensity = active ? 2.4 + pulse : 0.9 + pulse * 0.25;
-      ringMat.current.emissive = active ? whiteColor : emberColor;
+function CityModel() {
+  const { object } = useFitted(KNOWME_MAP_PATH, { sizeXZ: CITY_SIZE });
+  return <primitive object={object} />;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Player — floating Iron Cameraman
+   ──────────────────────────────────────────────────────────── */
+
+const KEYS_FWD = ["KeyW", "ArrowUp"];
+const KEYS_BACK = ["KeyS", "ArrowDown"];
+const KEYS_LEFT = ["KeyA", "ArrowLeft"];
+const KEYS_RIGHT = ["KeyD", "ArrowRight"];
+const KEYS_UP = ["Space"];
+const KEYS_DOWN = ["ShiftLeft", "ShiftRight", "ControlLeft", "KeyC"];
+
+const FLY_SPEED = 34;
+const VERTICAL_SPEED = 22;
+const TURN_DAMP = 5.5;
+const CAM_DISTANCE = 15;
+const CAM_HEIGHT = 6.2;
+const CAM_DAMP = 3.2;
+const CAM_LOOK_AHEAD = 2.4;
+
+interface PlayerRig {
+  position: THREE.Vector3;
+  heading: number;
+  camYaw: number;
+}
+
+function IronMan({ paused }: { paused: boolean }) {
+  const { object } = useFitted(KNOWME_MC_PATH, { sizeY: 4.2 });
+  const groupRef = useRef<THREE.Group>(null);
+  const modelRef = useRef<THREE.Group>(null);
+  const keysRef = useRef<Set<string>>(new Set());
+
+  const rig = useRef<PlayerRig>({
+    position: new THREE.Vector3(...MC_START),
+    heading: Math.PI,
+    camYaw: Math.PI,
+  });
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      keysRef.current.add(e.code);
+      // Keep the page from scrolling while flying
+      if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
+    };
+    const up = (e: KeyboardEvent) => keysRef.current.delete(e.code);
+    const clear = () => keysRef.current.clear();
+
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", clear);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", clear);
+    };
+  }, []);
+
+  useFrame((state, rawDt) => {
+    const dt = Math.min(rawDt, 0.05);
+    const keys = keysRef.current;
+    const r = rig.current;
+
+    if (!paused) {
+      const pressed = (codes: string[]) => codes.some((c) => keys.has(c));
+
+      /* movement input relative to the camera yaw */
+      let ix = 0;
+      let iz = 0;
+      if (pressed(KEYS_FWD)) iz += 1;
+      if (pressed(KEYS_BACK)) iz -= 1;
+      if (pressed(KEYS_LEFT)) ix += 1;
+      if (pressed(KEYS_RIGHT)) ix -= 1;
+
+      const moving = ix !== 0 || iz !== 0;
+      if (moving) {
+        const len = Math.hypot(ix, iz);
+        ix /= len;
+        iz /= len;
+
+        const sin = Math.sin(r.camYaw);
+        const cos = Math.cos(r.camYaw);
+        // camera-relative → world direction
+        const dirX = iz * sin + ix * cos;
+        const dirZ = iz * cos - ix * sin;
+
+        r.position.x += dirX * FLY_SPEED * dt;
+        r.position.z += dirZ * FLY_SPEED * dt;
+
+        const targetHeading = Math.atan2(dirX, dirZ);
+        let delta = targetHeading - r.heading;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        r.heading += delta * Math.min(1, TURN_DAMP * dt);
+      }
+
+      /* altitude */
+      if (pressed(KEYS_UP)) r.position.y += VERTICAL_SPEED * dt;
+      if (pressed(KEYS_DOWN)) r.position.y -= VERTICAL_SPEED * dt;
+
+      /* bounds */
+      const radial = Math.hypot(r.position.x, r.position.z);
+      if (radial > CITY_BOUNDS_RADIUS) {
+        const k = CITY_BOUNDS_RADIUS / radial;
+        r.position.x *= k;
+        r.position.z *= k;
+      }
+      r.position.y = THREE.MathUtils.clamp(r.position.y, FLY_MIN_Y, FLY_MAX_Y);
+
+      /* camera yaw slowly follows the heading for smooth chase turns */
+      let camDelta = r.heading - r.camYaw;
+      while (camDelta > Math.PI) camDelta -= Math.PI * 2;
+      while (camDelta < -Math.PI) camDelta += Math.PI * 2;
+      r.camYaw += camDelta * Math.min(1, CAM_DAMP * dt);
     }
-    if (fillMat.current) {
-      fillMat.current.opacity = active ? 0.32 + pulse * 0.12 : 0.14 + pulse * 0.05;
+
+    /* hover bob + gentle sway (visual only) */
+    const t = state.clock.elapsedTime;
+    const bob = Math.sin(t * 1.7) * 0.55;
+    const sway = Math.sin(t * 0.9) * 0.06;
+
+    const group = groupRef.current;
+    if (group) {
+      group.position.set(r.position.x, r.position.y + bob, r.position.z);
+      group.rotation.y = r.heading;
     }
+    const model = modelRef.current;
+    if (model) {
+      model.rotation.z = sway;
+      model.rotation.x = Math.sin(t * 1.1) * 0.04;
+    }
+
+    /* chase camera */
+    const cam = state.camera;
+    const camX = r.position.x - Math.sin(r.camYaw) * CAM_DISTANCE;
+    const camZ = r.position.z - Math.cos(r.camYaw) * CAM_DISTANCE;
+    const camY = r.position.y + CAM_HEIGHT;
+
+    const smooth = 1 - Math.exp(-4.5 * dt);
+    cam.position.x += (camX - cam.position.x) * smooth;
+    cam.position.y += (camY - cam.position.y) * smooth;
+    cam.position.z += (camZ - cam.position.z) * smooth;
+
+    cam.lookAt(
+      r.position.x + Math.sin(r.heading) * CAM_LOOK_AHEAD,
+      r.position.y + bob + 1.6,
+      r.position.z + Math.cos(r.heading) * CAM_LOOK_AHEAD,
+    );
   });
 
   return (
-    <group position={[landmark.position[0], groundY, landmark.position[2]]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]}>
-        <ringGeometry args={[2.1, 2.35, 56]} />
-        <meshStandardMaterial
-          ref={ringMat}
-          color={GLOW_WHITE}
-          emissive={EMBER}
-          emissiveIntensity={1}
-          roughness={0.4}
-          transparent
-          opacity={0.95}
+    <group ref={groupRef}>
+      <group ref={modelRef}>
+        <primitive object={object} />
+        {/* under-glow so the character reads against the dark city */}
+        <pointLight
+          position={[0, 1.5, 0]}
+          intensity={18}
+          distance={26}
+          color="#7fd0ff"
         />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <circleGeometry args={[2.1, 56]} />
-        <meshStandardMaterial
-          ref={fillMat}
-          color={EMBER}
-          emissive={EMBER}
-          emissiveIntensity={0.9}
-          transparent
-          opacity={0.16}
-        />
-      </mesh>
-
-      <group rotation={[0, landmark.rotationY, 0]} scale={1.35}>
-        <StandingRock seed={landmark.seed} />
       </group>
-
-      <pointLight
-        color={EMBER}
-        intensity={active ? 32 : 16}
-        distance={10}
-        decay={2}
-        position={[0, 2.2, 0]}
-      />
-
-      <Billboard position={[0, 4.2, 0]}>
-        <Text
-          font={KNOWME_HAND_FONT}
-          fontSize={1.05}
-          color={active ? "#ffffff" : "#ffd9c4"}
-          anchorX="center"
-          anchorY="bottom"
-          outlineWidth={0.035}
-          outlineColor={NIGHT_BG}
-        >
-          {landmark.label.toUpperCase()}
-        </Text>
-        <Text
-          font={KNOWME_HAND_FONT}
-          fontSize={0.48}
-          color={active ? "#ffe6d6" : "#e5b9c8"}
-          anchorX="center"
-          anchorY="top"
-          position={[0, -0.08, 0]}
-          outlineWidth={0.025}
-          outlineColor={NIGHT_BG}
-        >
-          {landmark.subtitle}
-        </Text>
-      </Billboard>
     </group>
   );
 }
 
-/* ---------------------------------------------- */
-/* Big extruded name — SIDDHANT BHAGAT             */
-/* ---------------------------------------------- */
-function NameMonument({ groundY }: { groundY: number }) {
-  return (
-    <group position={[0, groundY, -16]}>
-      <Center disableY>
-        <Text3D
-          font={KNOWME_TITLE_FONT}
-          size={2.4}
-          height={0.7}
-          bevelEnabled
-          bevelThickness={0.05}
-          bevelSize={0.04}
-          bevelSegments={3}
-          curveSegments={8}
-          castShadow
-        >
-          {profile.name}
-          <meshStandardMaterial color="#8b7cf8" roughness={0.55} metalness={0.1} />
-        </Text3D>
-      </Center>
-    </group>
-  );
-}
+/* ────────────────────────────────────────────────────────────
+   NPC cars — fixed elliptical routes
+   ──────────────────────────────────────────────────────────── */
 
-function Lamp({
-  x,
-  z,
-  rotY,
-  groundY,
-}: {
-  x: number;
-  z: number;
-  rotY: number;
-  groundY: number;
-}) {
-  return (
-    <group position={[x, groundY, z]} rotation={[0, rotY, 0]}>
-      <mesh castShadow position={[0, 1.1, 0]}>
-        <boxGeometry args={[0.16, 2.2, 0.16]} />
-        <meshStandardMaterial color="#3a1235" roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 2.05, 0]}>
-        <boxGeometry args={[0.44, 0.5, 0.3]} />
-        <meshStandardMaterial
-          color="#ffb26b"
-          emissive="#ff8a3d"
-          emissiveIntensity={2.2}
-        />
-      </mesh>
-      <pointLight
-        color="#ff8a3d"
-        intensity={16}
-        distance={9}
-        decay={2}
-        position={[0, 2.1, 0]}
-      />
-    </group>
-  );
-}
+const PAINT_MATERIAL_RE = /chassis|body|paint|door|caixa|carro|COP_Liv/i;
+const KEEP_MATERIAL_RE = /glass|window|tire|wheel|rim|light|interior|plate/i;
 
-/* ---------------------------------------------------- */
-/* Spawn circle — glowing ring + hand-written hint text  */
-/* ---------------------------------------------------- */
-function SpawnArea({ sampler }: { sampler: GroundSampler }) {
-  const hintY = (sampler(0, 5) ?? 0) + 0.08;
-  return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <ringGeometry args={[1.6, 1.75, 72]} />
-        <meshStandardMaterial
-          color={GLOW_WHITE}
-          emissive={GLOW_WHITE}
-          emissiveIntensity={1.3}
-          transparent
-          opacity={0.9}
-        />
-      </mesh>
-      <Text
-        font={KNOWME_HAND_FONT}
-        position={[0, hintY, 5]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.7}
-        color="#ffffff"
-        anchorX="center"
-        anchorY="middle"
-        textAlign="center"
-        outlineWidth={0.02}
-        outlineColor={NIGHT_BG}
-      >
-        {"WASD TO WALK · MOVE MOUSE TO LOOK\nENTER OPENS A GLOWING STONE"}
-      </Text>
-    </group>
-  );
-}
+/** Clone a car and tint its paint materials black/white. */
+function useTintedCar(model: KnowMeCarConfig["model"], tint: string) {
+  const path =
+    model === "koenigsegg"
+      ? KNOWME_CAR_KOENIGSEGG_PATH
+      : KNOWME_CAR_SONATA_PATH;
+  const { scene } = useGLTF(path);
 
-/* ---------------------------------------------- */
-/* Player avatar — idle / walk / run animations    */
-/* ---------------------------------------------- */
-function renameClips(clips: import("three").AnimationClip[], label: string) {
-  return clips.map((clip, index) => {
-    const next = clip.clone();
-    next.name = clips.length === 1 ? label : `${label}_${index}`;
-    return next;
-  });
-}
+  return useMemo(() => {
+    const clone = scene.clone(true);
 
-/** Remove hip translation so Mixamo walk/run cycles play in place. */
-function stripRootMotion(clips: import("three").AnimationClip[]) {
-  for (const clip of clips) {
-    clip.tracks = clip.tracks.filter(
-      (track) =>
-        !(
-          track.name.toLowerCase().includes("hips") &&
-          track.name.endsWith(".position")
-        ),
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const scale = 7 / Math.max(size.x, size.z, 0.0001);
+
+    const group = new THREE.Group();
+    group.add(clone);
+    clone.scale.setScalar(scale);
+    clone.position.set(
+      -center.x * scale,
+      -box.min.y * scale,
+      -center.z * scale,
     );
-  }
-  return clips;
-}
 
-function PlayerAvatar({ speedRef }: { speedRef: RefObject<number> }) {
-  const modelRef = useRef<Group>(null);
-  const { scene: glbScene } = useGLTF(KNOWME_AVATAR_PATH);
-  const idleFbx = useFBX(careerModelAnimations.idle);
-  const walkFbx = useFBX(KNOWME_WALK_FBX);
-  const runFbx = useFBX(KNOWME_RUN_FBX);
+    const color = new THREE.Color(tint);
+    clone.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      const mesh = child as THREE.Mesh;
+      mesh.castShadow = true;
+      mesh.receiveShadow = false;
 
-  const model = useMemo(() => {
-    let cloned: Object3D;
-    try {
-      cloned = cloneSkinned(glbScene) as Object3D;
-    } catch {
-      cloned = glbScene.clone(true);
-    }
-    prepareShadows(cloned);
-    // skinned bounds go stale while animating — never cull the avatar
-    cloned.traverse((child) => {
-      child.frustumCulled = false;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+
+      mesh.material = (Array.isArray(mesh.material)
+        ? materials.map((m) => retintMaterial(m, color))
+        : retintMaterial(materials[0], color)) as typeof mesh.material;
     });
-    return cloned;
-  }, [glbScene]);
 
-  const clips = useMemo(
-    () =>
-      buildSafeClips(model, [
-        { label: "idle", animations: renameClips(idleFbx.animations, "idle") },
-        {
-          label: "walk",
-          animations: stripRootMotion(renameClips(walkFbx.animations, "walk")),
-        },
-        {
-          label: "run",
-          animations: stripRootMotion(renameClips(runFbx.animations, "run")),
-        },
-      ]),
-    [model, idleFbx, walkFbx, runFbx],
-  );
+    return group;
+  }, [scene, tint]);
+}
 
-  const { actions, mixer } = useAnimations(clips, modelRef);
-  const currentRef = useRef("idle");
+function retintMaterial(
+  material: THREE.Material,
+  color: THREE.Color,
+): THREE.Material {
+  const name = material.name ?? "";
+  if (KEEP_MATERIAL_RE.test(name)) return material;
+  if (!PAINT_MATERIAL_RE.test(name)) return material;
 
-  useEffect(() => {
-    const idle = actions.idle ?? Object.values(actions)[0];
-    idle?.reset().setLoop(LoopRepeat, Infinity).fadeIn(0.2).play();
-    currentRef.current = "idle";
-    return () => {
-      mixer.stopAllAction();
-    };
-  }, [actions, mixer]);
+  const std = material as THREE.MeshStandardMaterial;
+  const tinted = std.clone();
+  tinted.map = null;
+  tinted.color = color.clone();
+  tinted.metalness = 0.75;
+  tinted.roughness = 0.32;
+  return tinted;
+}
 
-  useFrame(() => {
-    const speed = speedRef.current ?? 0;
-    const target = speed > 7.5 ? "run" : speed > 0.45 ? "walk" : "idle";
-    if (target !== currentRef.current) {
-      const prev = actions[currentRef.current];
-      const next = actions[target];
-      if (next) {
-        next.reset().setLoop(LoopRepeat, Infinity).fadeIn(0.22).play();
-        prev?.fadeOut(0.22);
-        currentRef.current = target;
-      }
-    }
-    if (currentRef.current !== "idle") {
-      const action = actions[currentRef.current];
-      if (action) {
-        action.timeScale = Math.max(0.85, Math.min(1.7, speed / 4.2));
-      }
-    }
+function NpcCar({ config }: { config: KnowMeCarConfig }) {
+  const object = useTintedCar(config.model, config.tint);
+  const ref = useRef<THREE.Group>(null);
+
+  /* average angular speed so linear speed ≈ config.speed */
+  const angularSpeed = useMemo(() => {
+    const avgRadius = (config.radiusX + config.radiusZ) / 2;
+    return (config.speed / Math.max(avgRadius, 1)) * config.direction;
+  }, [config]);
+
+  useFrame((state) => {
+    const group = ref.current;
+    if (!group) return;
+
+    const t = config.phase + state.clock.elapsedTime * angularSpeed;
+    const [cx, cz] = config.center;
+
+    const x = cx + Math.cos(t) * config.radiusX;
+    const z = cz + Math.sin(t) * config.radiusZ;
+
+    /* tangent of the ellipse — direction of travel */
+    const dx = -Math.sin(t) * config.radiusX * Math.sign(angularSpeed);
+    const dz = Math.cos(t) * config.radiusZ * Math.sign(angularSpeed);
+
+    group.position.set(x, 0.25, z);
+    group.rotation.y = Math.atan2(dx, dz);
   });
 
   return (
-    <group scale={AVATAR_SCALE}>
-      <primitive ref={modelRef} object={model} />
+    <group ref={ref}>
+      <primitive object={object} />
     </group>
   );
 }
 
-/* --------------------------------------- */
-/* Cameras — mouse orbits, WASD only moves  */
-/* --------------------------------------- */
-interface CameraOrbit {
-  yaw: number;
-  pitch: number;
-}
-
-function LoaderCamera() {
-  const { camera } = useThree();
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime * 0.08;
-    camera.position.set(
-      Math.sin(t) * 1.2 + 10.5,
-      8.2,
-      Math.cos(t) * 1.2 + 10.5,
-    );
-    camera.lookAt(0, 0, 0);
-  });
-  return null;
-}
-
-function OrbitFollowCamera({
-  target,
-  orbitRef,
-  paused,
-}: {
-  target: RefObject<Group | null>;
-  orbitRef: RefObject<CameraOrbit>;
-  paused: boolean;
-}) {
-  const { camera, gl } = useThree();
-  const current = useRef<Vector3 | null>(null);
-  const look = useRef(new Vector3());
-  const last = useRef<{ x: number; y: number } | null>(null);
-  const pausedRef = useRef(paused);
-
-  useEffect(() => {
-    pausedRef.current = paused;
-    if (paused) last.current = null;
-  }, [paused]);
-
-  useEffect(() => {
-    const el = gl.domElement;
-    el.style.cursor = "none";
-
-    // Hover look — moving the mouse over the canvas aims the camera
-    // (no click/drag). Sensitivity is tuned for third-person feel.
-    const SENS_X = 0.0038;
-    const SENS_Y = 0.0028;
-
-    const onEnter = (event: PointerEvent) => {
-      last.current = { x: event.clientX, y: event.clientY };
-    };
-    const onLeave = () => {
-      last.current = null;
-    };
-    const onMove = (event: PointerEvent) => {
-      if (pausedRef.current) return;
-      if (!last.current) {
-        last.current = { x: event.clientX, y: event.clientY };
-        return;
-      }
-      const dx = event.clientX - last.current.x;
-      const dy = event.clientY - last.current.y;
-      last.current = { x: event.clientX, y: event.clientY };
-
-      // Ignore huge jumps (entering window / alt-tab)
-      if (Math.abs(dx) > 80 || Math.abs(dy) > 80) return;
-
-      orbitRef.current.yaw -= dx * SENS_X;
-      orbitRef.current.pitch = Math.max(
-        0.12,
-        Math.min(1.15, orbitRef.current.pitch + dy * SENS_Y),
-      );
-    };
-
-    el.addEventListener("pointerenter", onEnter);
-    el.addEventListener("pointerleave", onLeave);
-    el.addEventListener("pointermove", onMove);
-    return () => {
-      el.removeEventListener("pointerenter", onEnter);
-      el.removeEventListener("pointerleave", onLeave);
-      el.removeEventListener("pointermove", onMove);
-      el.style.cursor = "";
-    };
-  }, [gl, orbitRef]);
-
-  useFrame(() => {
-    const player = target.current;
-    if (!player) return;
-
-    const { yaw, pitch } = orbitRef.current;
-    const dist = 5.6;
-    const desired = new Vector3(
-      player.position.x + Math.sin(yaw) * Math.cos(pitch) * dist,
-      player.position.y + Math.sin(pitch) * dist + 0.55,
-      player.position.z + Math.cos(yaw) * Math.cos(pitch) * dist,
-    );
-
-    if (!current.current) {
-      current.current = desired.clone();
-    } else {
-      current.current.lerp(desired, 0.22);
-    }
-    camera.position.copy(current.current);
-
-    look.current.set(
-      player.position.x,
-      player.position.y + 1.35,
-      player.position.z,
-    );
-    camera.lookAt(look.current);
-  });
-
-  return null;
-}
-
-/* ---------------------------------------------------------- */
-/* Keyboard controller — WASD moves; mouse aims the camera     */
-/* ---------------------------------------------------------- */
-interface PlayerControllerProps {
-  playerRef: RefObject<Group | null>;
-  speedRef: RefObject<number>;
-  orbitRef: RefObject<CameraOrbit>;
-  sampler: GroundSampler;
-  paused: boolean;
-  onNearestChange: (landmark: KnowMeLandmark | null) => void;
-  onActivate: (landmark: KnowMeLandmark) => void;
-}
-
-function PlayerController({
-  playerRef,
-  speedRef,
-  orbitRef,
-  sampler,
-  paused,
-  onNearestChange,
-  onActivate,
-}: PlayerControllerProps) {
-  const keys = useRef({ up: false, down: false, left: false, right: false });
-  const velocity = useRef(new Vector3());
-  const heading = useRef(0);
-  const forward = useRef(new Vector3());
-  const right = useRef(new Vector3());
-  const wish = useRef(new Vector3());
-  const nearestRef = useRef<KnowMeLandmark | null>(null);
-  const onNearestChangeRef = useRef(onNearestChange);
-  const onActivateRef = useRef(onActivate);
-  const pausedRef = useRef(paused);
-
-  useEffect(() => {
-    onNearestChangeRef.current = onNearestChange;
-  }, [onNearestChange]);
-  useEffect(() => {
-    onActivateRef.current = onActivate;
-  }, [onActivate]);
-  useEffect(() => {
-    pausedRef.current = paused;
-    if (paused) {
-      keys.current.up = false;
-      keys.current.down = false;
-      keys.current.left = false;
-      keys.current.right = false;
-    }
-  }, [paused]);
-
-  useEffect(() => {
-    const mapKey = (key: string) => {
-      if (key === "ArrowUp" || key === "w" || key === "W") return "up";
-      if (key === "ArrowDown" || key === "s" || key === "S") return "down";
-      if (key === "ArrowLeft" || key === "a" || key === "A") return "left";
-      if (key === "ArrowRight" || key === "d" || key === "D") return "right";
-      return null;
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (pausedRef.current) return;
-      const dir = mapKey(event.key);
-      if (dir) {
-        keys.current[dir] = true;
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      if (event.key === "Enter" || event.key === "e" || event.key === "E") {
-        if (nearestRef.current) {
-          event.preventDefault();
-          event.stopPropagation();
-          onActivateRef.current(nearestRef.current);
-        }
-      }
-    };
-
-    const onKeyUp = (event: KeyboardEvent) => {
-      const dir = mapKey(event.key);
-      if (dir) keys.current[dir] = false;
-    };
-
-    const clearKeys = () => {
-      keys.current.up = false;
-      keys.current.down = false;
-      keys.current.left = false;
-      keys.current.right = false;
-    };
-
-    window.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("keyup", onKeyUp, true);
-    window.addEventListener("blur", clearKeys);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("keyup", onKeyUp, true);
-      window.removeEventListener("blur", clearKeys);
-    };
-  }, []);
-
-  useFrame((_, delta) => {
-    const player = playerRef.current;
-    if (!player || pausedRef.current) return;
-
-    const prevX = player.position.x;
-    const prevZ = player.position.z;
-
-    // Move relative to mouse-aimed camera yaw (not character facing),
-    // so WASD never steers the camera by itself.
-    const yaw = orbitRef.current.yaw;
-    forward.current.set(-Math.sin(yaw), 0, -Math.cos(yaw));
-    right.current.set(Math.cos(yaw), 0, -Math.sin(yaw));
-
-    const fwd =
-      (keys.current.up ? 1 : 0) - (keys.current.down ? 1 : 0);
-    const strafe =
-      (keys.current.right ? 1 : 0) - (keys.current.left ? 1 : 0);
-
-    wish.current
-      .set(0, 0, 0)
-      .addScaledVector(forward.current, fwd)
-      .addScaledVector(right.current, strafe);
-
-    const accel = 42;
-    const maxSpeed = 11;
-    const damp = Math.pow(0.84, delta * 60);
-    if (wish.current.lengthSq() > 0) {
-      wish.current.normalize().multiplyScalar(accel * delta);
-      velocity.current.add(wish.current);
-    }
-    velocity.current.multiplyScalar(damp);
-    if (velocity.current.length() > maxSpeed) {
-      velocity.current.setLength(maxSpeed);
-    }
-
-    player.position.x += velocity.current.x * delta;
-    player.position.z += velocity.current.z * delta;
-
-    const radial = Math.hypot(player.position.x, player.position.z);
-    if (radial > MAP_RADIUS - 0.5) {
-      const s = (MAP_RADIUS - 0.5) / radial;
-      player.position.x *= s;
-      player.position.z *= s;
-      velocity.current.multiplyScalar(0.4);
-    }
-
-    for (const landmark of knowMeLandmarks) {
-      const dx = player.position.x - landmark.position[0];
-      const dz = player.position.z - landmark.position[2];
-      const dist = Math.hypot(dx, dz);
-      const minDist = 2.4;
-      if (dist < minDist && dist > 0.001) {
-        const push = (minDist - dist) / minDist;
-        player.position.x += (dx / dist) * push * 0.4;
-        player.position.z += (dz / dist) * push * 0.4;
-        velocity.current.multiplyScalar(0.7);
-      }
-    }
-
-    const groundY = sampler(player.position.x, player.position.z);
-    if (groundY === null) {
-      player.position.x = prevX;
-      player.position.z = prevZ;
-      velocity.current.multiplyScalar(-0.2);
-    } else if (groundY - player.position.y > 2.8) {
-      player.position.x = prevX;
-      player.position.z = prevZ;
-      velocity.current.multiplyScalar(-0.15);
-    } else {
-      player.position.y += (groundY - player.position.y) * Math.min(1, delta * 10);
-    }
-
-    const speed = velocity.current.length();
-    speedRef.current = speed;
-
-    // Character faces walk direction; camera stays on mouse orbit
-    if (speed > 0.25) {
-      const targetYaw = Math.atan2(velocity.current.x, velocity.current.z);
-      let diff = targetYaw - heading.current;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      heading.current += diff * Math.min(1, delta * 12);
-      player.rotation.y = heading.current;
-    }
-
-    let best: KnowMeLandmark | null = null;
-    let bestDist = LANDMARK_ENTER_RADIUS;
-    for (const landmark of knowMeLandmarks) {
-      const d = Math.hypot(
-        player.position.x - landmark.position[0],
-        player.position.z - landmark.position[2],
-      );
-      if (d < bestDist) {
-        bestDist = d;
-        best = landmark;
-      }
-    }
-    if (best?.id !== nearestRef.current?.id) {
-      nearestRef.current = best;
-      onNearestChangeRef.current(best);
-    }
-  });
-
-  return null;
-}
-
-/* -------------- */
-/* Full 3D world  */
-/* -------------- */
-function WorldContents({
-  visible,
-  paused,
-  onNearestChange,
-  onActivate,
-  nearestId,
-}: {
-  visible: boolean;
-  paused: boolean;
-  onNearestChange: (landmark: KnowMeLandmark | null) => void;
-  onActivate: (landmark: KnowMeLandmark) => void;
-  nearestId: string | null;
-}) {
-  const playerRef = useRef<Group>(null);
-  const speedRef = useRef(0);
-  const orbitRef = useRef<CameraOrbit>({ yaw: Math.PI, pitch: 0.38 });
-  const [sampler, setSampler] = useState<GroundSampler | null>(null);
-
-  // terrain heights are raycasts against the village mesh — compute once
-  const groundYs = useMemo(() => {
-    if (!sampler) return null;
-    return {
-      name: sampler(0, -16) ?? 0,
-      landmarks: knowMeLandmarks.map(
-        (l) => sampler(l.position[0], l.position[2]) ?? 0,
-      ),
-      lamps: knowMeLamps.map(([x, z]) => sampler(x, z) ?? 0),
-    };
-  }, [sampler]);
-
+function Traffic() {
   return (
-    <group visible={visible}>
-      <MapModel onReady={(s) => setSampler(() => s)} />
-
-      {sampler && groundYs && (
-        <>
-          <SpawnArea sampler={sampler} />
-          <NameMonument groundY={groundYs.name} />
-
-          {knowMeLandmarks.map((landmark, index) => (
-            <LandmarkStone
-              key={landmark.id}
-              landmark={landmark}
-              active={landmark.id === nearestId}
-              groundY={groundYs.landmarks[index]}
-            />
-          ))}
-
-          {knowMeLamps.map(([x, z, rotY], index) => (
-            <Lamp
-              key={index}
-              x={x}
-              z={z}
-              rotY={rotY}
-              groundY={groundYs.lamps[index]}
-            />
-          ))}
-
-          <group ref={playerRef}>
-            <PlayerAvatar speedRef={speedRef} />
-          </group>
-
-          <PlayerController
-            playerRef={playerRef}
-            speedRef={speedRef}
-            orbitRef={orbitRef}
-            sampler={sampler}
-            paused={paused || !visible}
-            onNearestChange={onNearestChange}
-            onActivate={onActivate}
-          />
-          {visible && (
-            <OrbitFollowCamera
-              target={playerRef}
-              orbitRef={orbitRef}
-              paused={paused || !visible}
-            />
-          )}
-        </>
-      )}
-    </group>
+    <>
+      {knowMeCars.map((car) => (
+        <NpcCar key={car.id} config={car} />
+      ))}
+    </>
   );
 }
+
+/* ────────────────────────────────────────────────────────────
+   Scene
+   ──────────────────────────────────────────────────────────── */
 
 interface KnowMeWorldSceneProps {
-  started: boolean;
   paused?: boolean;
-  onNearestChange: (landmark: KnowMeLandmark | null) => void;
-  onActivate: (landmark: KnowMeLandmark) => void;
-  nearestId: string | null;
 }
 
-export function KnowMeWorldScene({
-  started,
-  paused = false,
-  onNearestChange,
-  onActivate,
-  nearestId,
-}: KnowMeWorldSceneProps) {
+export function KnowMeWorldScene({ paused = false }: KnowMeWorldSceneProps) {
   return (
     <Canvas
       className="knowme-world-canvas"
       shadows
-      dpr={[1, 1.5]}
-      camera={{ position: [0, 3.2, 6], fov: 50, near: 0.1, far: 500 }}
-      gl={{ antialias: true, alpha: false }}
+      dpr={[1, 1.6]}
+      gl={{ antialias: true, powerPreference: "high-performance" }}
+      camera={{ position: [0, 34, 70], fov: 55, near: 0.5, far: 900 }}
+      onCreated={({ gl, scene }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1.05;
+        scene.background = new THREE.Color("#05010f");
+        scene.fog = new THREE.Fog("#0a0518", 120, 520);
+      }}
     >
-      <color attach="background" args={[NIGHT_BG]} />
-      <fog attach="fog" args={[NIGHT_BG, 55, 220]} />
-
-      <ambientLight color="#d9c4ff" intensity={0.35} />
-      <hemisphereLight args={["#c77aff", "#12041f", 0.42]} />
+      {/* night lighting — the city carries its own neon/emissive textures */}
+      <ambientLight intensity={0.38} color="#8fa8ff" />
       <directionalLight
+        position={[120, 180, 60]}
+        intensity={0.9}
+        color="#b9cdfa"
         castShadow
-        color="#ffa8d4"
-        position={[48, 70, 32]}
-        intensity={1.15}
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-160}
-        shadow-camera-right={160}
-        shadow-camera-top={160}
-        shadow-camera-bottom={-160}
-        shadow-camera-far={280}
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-left={-220}
+        shadow-camera-right={220}
+        shadow-camera-top={220}
+        shadow-camera-bottom={-220}
+        shadow-camera-far={520}
       />
+      <hemisphereLight args={["#33208a", "#050208", 0.55]} />
 
-      <Stars radius={90} depth={30} count={1600} factor={4} fade speed={0.5} />
+      <Stars radius={380} depth={60} count={2600} factor={5} fade speed={0.6} />
 
-      <GridFloor visible={!started} />
-      {!started && <LoadingStage />}
-      {!started && <LoaderCamera />}
-
-      <Suspense fallback={null}>
-        <WorldContents
-          visible={started}
-          paused={paused}
-          onNearestChange={onNearestChange}
-          onActivate={onActivate}
-          nearestId={nearestId}
-        />
-        <Environment preset="night" />
-      </Suspense>
+      <CityModel />
+      <Traffic />
+      <IronMan paused={paused} />
     </Canvas>
   );
 }
 
-useGLTF.preload(KNOWME_AVATAR_PATH);
 useGLTF.preload(KNOWME_MAP_PATH);
-useFBX.preload(careerModelAnimations.idle);
-useFBX.preload(KNOWME_WALK_FBX);
-useFBX.preload(KNOWME_RUN_FBX);
+useGLTF.preload(KNOWME_MC_PATH);
+useGLTF.preload(KNOWME_CAR_KOENIGSEGG_PATH);
+useGLTF.preload(KNOWME_CAR_SONATA_PATH);
