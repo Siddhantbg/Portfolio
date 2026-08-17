@@ -315,7 +315,7 @@ export function HireMeModal({ open, onClose }: HireMeModalProps) {
             {signed && (
               <p className="hire-signed-note">
                 Let&apos;s connect —{" "}
-                <a href={`mailto:${profile.email}`}>{profile.email}</a>
+                <a href={`mailto:${profile.email}`}>send an email</a>
               </p>
             )}
           </section>

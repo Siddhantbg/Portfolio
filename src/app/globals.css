@@ -264,6 +264,14 @@ body {
   -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 35%);
 }
 
+.fifa-tile-photo-panel {
+  left: 38%;
+  opacity: 0.92;
+  background-size: cover;
+  mask-image: linear-gradient(90deg, transparent 0%, black 28%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 28%);
+}
+
 .fifa-tile-hero-fade {
   position: absolute;
   inset: 0;
@@ -273,6 +281,20 @@ body {
     rgba(248, 250, 255, 0.78) 0%,
     rgba(236, 242, 250, 0.58) 36%,
     rgba(236, 242, 250, 0.18) 58%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.fifa-tile-panel-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    rgba(248, 250, 255, 0.82) 0%,
+    rgba(236, 242, 250, 0.62) 42%,
+    rgba(236, 242, 250, 0.18) 68%,
     transparent 100%
   );
   pointer-events: none;
@@ -1497,6 +1519,132 @@ body {
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.connect-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 50;
+  width: min(320px, 86vw);
+  padding: 0.4rem;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.18),
+    0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.connect-menu::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 28px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  transform: rotate(45deg);
+  box-shadow: -2px -2px 6px rgba(15, 23, 42, 0.06);
+}
+
+.connect-menu-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.62rem 0.55rem;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+.connect-menu-row:hover {
+  background: #f4f6f8;
+}
+
+.connect-menu-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 10px;
+  background: #f3f4f6;
+}
+
+.connect-menu-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.connect-menu-copyblock {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.connect-menu-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.15;
+}
+
+.connect-menu-sub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #8a9099;
+  line-height: 1.2;
+}
+
+.connect-menu-chevron {
+  flex-shrink: 0;
+  color: #6b7280;
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 400;
+}
+
+.connect-menu-row-email {
+  cursor: default;
+}
+
+.connect-menu-row-email:hover {
+  background: #f4f6f8;
+}
+
+.connect-copy-btn,
+.connect-mail-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  height: 1.7rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #1f2937;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.connect-copy-btn:hover,
+.connect-mail-btn:hover {
+  background: #eef2f7;
+  border-color: #d1d5db;
 }
 
 /* â”€â”€ Header audio player â”€â”€ */
