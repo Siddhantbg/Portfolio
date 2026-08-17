@@ -101,6 +101,7 @@ export function Tile({
             className={cn(
               "fifa-tile-photo",
               variant === "hero" && "fifa-tile-photo-hero",
+              variant === "panel" && "fifa-tile-photo-panel",
               variant === "card" && "fifa-tile-photo-card",
             )}
             style={{
@@ -112,6 +113,10 @@ export function Tile({
 
         {variant === "hero" && backgroundImage && (
           <div className="fifa-tile-hero-fade" aria-hidden="true" />
+        )}
+
+        {variant === "panel" && backgroundImage && (
+          <div className="fifa-tile-panel-fade" aria-hidden="true" />
         )}
 
         {watermark && (

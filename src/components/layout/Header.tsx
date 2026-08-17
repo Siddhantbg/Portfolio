@@ -30,16 +30,9 @@ function GitHubIcon() {
 
 function LeetCodeIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="#FFA116"
-        d="M13.5 3.2 8.2 8.4a4.4 4.4 0 0 0 0 6.2l5.3 5.2 1.6-1.6-5.3-5.2a2.2 2.2 0 0 1 0-3.1l5.3-5.2-1.6-1.5z"
-      />
-      <path
-        fill="#000"
-        d="M16.2 7.4h-5.1v2.1h5.1a2.6 2.6 0 0 1 0 5.2h-2.4v2.1h2.4a4.7 4.7 0 0 0 0-9.4z"
-      />
-    </svg>
+    // Official LeetCode mark (orange / black / grey)
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/brands/leetcode.svg" alt="" width={22} height={22} />
   );
 }
 

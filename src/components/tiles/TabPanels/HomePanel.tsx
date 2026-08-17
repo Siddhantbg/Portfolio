@@ -7,6 +7,7 @@ import { EducationQualificationsTile } from "@/components/education/EducationQua
 import { KnowMeTile } from "@/components/knowme/KnowMeTile";
 import { SkillsTile } from "@/components/skills/SkillsTile";
 import type { TabId } from "@/data/portfolio";
+import newsAlertsBg from "@/assets/news-alerts-bg.png";
 
 interface HomePanelProps {
   onNavigate: (tab: TabId) => void;
@@ -38,7 +39,8 @@ export function HomePanel({ onNavigate }: HomePanelProps) {
         variant="panel"
         className="tile-area-news"
         navIndex={2}
-        watermark="PORTFOLIO"
+        backgroundImage={newsAlertsBg.src}
+        imagePosition="78% 50%"
         subtitle={profile.education.school}
         description={`${profile.education.degree} · CGPA ${profile.education.cgpa} · ${profile.education.period}`}
       >

@@ -11,7 +11,7 @@ import {
   type RefObject,
 } from "react";
 import { playlist, type PlaylistTrack } from "@/data/playlist";
-import { randomIndex, shuffleArray } from "@/lib/shuffle";
+import { shuffleCycle } from "@/lib/shuffle";
 
 const KICKOFF_KEY = "portfolio-kickoff";
 
@@ -33,12 +33,6 @@ interface AudioPlayerContextValue {
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
-
-function createInitialPlayOrder(length: number) {
-  const order = shuffleArray([...Array(length).keys()]);
-  const startPos = randomIndex(length);
-  return { order, startPos };
-}
 
 export function useAudioPlayer() {
   const ctx = useContext(AudioPlayerContext);
@@ -172,16 +166,23 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
   );
 
   const advancePlayOrder = useCallback((direction: 1 | -1) => {
-    const order = playOrderRef.current;
-    if (order.length === 0) return trackIndexRef.current;
+    const length = playlist.length;
+    if (length === 0) return trackIndexRef.current;
 
+    if (playOrderRef.current.length !== length) {
+      playOrderRef.current = shuffleCycle(length);
+      orderPosRef.current = 0;
+    }
+
+    const currentIndex = playOrderRef.current[orderPosRef.current];
     let nextPos = orderPosRef.current + direction;
 
-    if (nextPos >= order.length) {
-      playOrderRef.current = shuffleArray([...Array(playlist.length).keys()]);
+    if (nextPos >= length) {
+      // Full cycle done — new shuffle, never start with the song just played.
+      playOrderRef.current = shuffleCycle(length, currentIndex);
       nextPos = 0;
     } else if (nextPos < 0) {
-      nextPos = order.length - 1;
+      nextPos = length - 1;
     }
 
     orderPosRef.current = nextPos;
@@ -224,10 +225,10 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
       typeof window !== "undefined" &&
       sessionStorage.getItem(KICKOFF_KEY) === "1";
 
-    const { order, startPos } = createInitialPlayOrder(playlist.length);
+    const order = shuffleCycle(playlist.length);
     playOrderRef.current = order;
-    orderPosRef.current = startPos;
-    const firstTrackIndex = order[startPos];
+    orderPosRef.current = 0;
+    const firstTrackIndex = order[0];
 
     trackIndexRef.current = firstTrackIndex;
     setTrackIndex(firstTrackIndex);
